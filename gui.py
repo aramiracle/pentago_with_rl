@@ -15,6 +15,8 @@ class PentagoGame(QWidget):
             [QPushButton(), QPushButton()],
         ]
 
+        self.current_player = 1  # Player 1 starts
+        self.valid_move_made = False
         self.initUI()
 
     def initUI(self):
@@ -29,7 +31,7 @@ class PentagoGame(QWidget):
         for row in range(6):
             for col in range(6):
                 button = QPushButton()
-                button.setFixedSize(60, 60)  # Larger button size
+                button.setFixedSize(60, 60)
                 button.setStyleSheet(
                     "QPushButton { background-color: #e0e0e0; border: 1px solid black; border-radius: 30px; color: black; }"
                     "QPushButton:hover { background-color: #c0c0c0; }"
@@ -46,20 +48,14 @@ class PentagoGame(QWidget):
         for i in range(4):
             for j in range(2):
                 rotate_button = QPushButton()
-                rotate_button.setFixedSize(30, 30)  # Larger button size
+                rotate_button.setFixedSize(30, 30)
                 rotate_button.setStyleSheet("font-size: 18px; font-weight: bold;")
-
-                # Set text based on direction
                 rotate_button.setText("↻" if j == 0 else "↺")
-
-                # Connect the button click to the rotation function
                 rotate_button.clicked.connect(lambda _, idx=i, clockwise=j == 0: self.rotate_board_part(idx, clockwise=clockwise))
-
                 rotate_layout.addWidget(rotate_button, i // 2 * 3 + 1, (i % 2) * 3 + j * 2)
 
         layout.addLayout(rotate_layout)
         layout.addStretch()
-
 
         for i in range(4):
             self.rotation_buttons[i][0].clicked.connect(lambda _, idx=i: self.rotate_board_part(idx, clockwise=True))
@@ -67,9 +63,8 @@ class PentagoGame(QWidget):
 
         self.current_color = QColor('blue')
         self.setWindowTitle('Pentago Game')
-        self.setGeometry(100, 100, 400, 400)  # Adjusted window size
+        self.setGeometry(100, 100, 400, 400)
         self.show()
-
 
     def rotate_board_part(self, corner_index, clockwise=True):
         row_range, col_range = self.get_corner_ranges(corner_index)
@@ -77,6 +72,13 @@ class PentagoGame(QWidget):
         rotated_subgrid = np.rot90(subgrid, 3 if clockwise else 1)
         self.board[row_range[0]:row_range[1], col_range[0]:col_range[1]] = rotated_subgrid
         self.update_board_buttons()
+
+        # Enable board buttons after rotation
+        self.enable_board_buttons()
+        self.valid_move_made = False  # Reset the flag for the next player's move
+
+        # Switch to the next player's turn
+        self.current_player = 3 - self.current_player  # Switch between player 1 and player 2
 
     def get_corner_ranges(self, corner_index):
         if corner_index == 0:  # Up-left
@@ -102,15 +104,18 @@ class PentagoGame(QWidget):
     def board_button_clicked(self):
         sender_button = self.sender()
 
-        if sender_button:
+        if sender_button and not self.valid_move_made:
             row, col = self.get_button_position(sender_button)
-            current_color = 'blue' if self.current_color == QColor('blue') else 'red'
-            
-            # Check if the button is not already colored
-            if sender_button.styleSheet().find(current_color) == -1:
+
+            # Check if the selected button is not already occupied
+            if self.board[row, col] == 0:
+                self.board[row, col] = self.current_player
                 self.toggle_color()
-                self.board[row, col] = 1 if self.current_color == QColor('blue') else 2
                 self.update_board_buttons()
+
+                # Disable board buttons until rotation
+                self.disable_board_buttons()
+                self.valid_move_made = True
 
     def toggle_color(self):
         self.current_color = QColor('blue') if self.current_color == QColor('red') else QColor('red')
@@ -120,6 +125,16 @@ class PentagoGame(QWidget):
             for j in range(6):
                 if self.board_buttons[i][j] == button:
                     return i, j
+
+    def disable_board_buttons(self):
+        for row in range(6):
+            for col in range(6):
+                self.board_buttons[row][col].setDisabled(True)
+
+    def enable_board_buttons(self):
+        for row in range(6):
+            for col in range(6):
+                self.board_buttons[row][col].setEnabled(True)
 
 def main():
     app = QApplication(sys.argv)
