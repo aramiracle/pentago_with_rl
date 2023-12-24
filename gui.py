@@ -84,8 +84,8 @@ class PentagoGame(QWidget):
         self.valid_move_made = False  # Reset the flag for the next player's move
 
         # Check for a win after each rotation
-        if self.check_win():
-            if self.check_win_other_player():
+        if self.check_win(self.current_player):
+            if self.check_win(3 - self.current_player):
                 print("It's a draw!")
                 self.game_over = True
             else:
@@ -163,7 +163,7 @@ class PentagoGame(QWidget):
             for col in range(6):
                 self.board_buttons[row][col].setEnabled(True)
 
-    def check_win(self):
+    def check_win(self, player):
         # Check all directions for a win condition
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         
@@ -171,27 +171,12 @@ class PentagoGame(QWidget):
         for row in range(6):
             for col in range(6):
                 # Check only if the button is non-empty (colored)
-                if self.board[row, col] == self.current_player:
+                if self.board[row, col] == player:
                     for dr, dc in directions:
-                        if self.count_aligned(row, col, dr, dc, self.current_player) >= 5:
+                        if self.count_aligned(row, col, dr, dc, player) >= 5:
                             return True
         return False
     
-    def check_win_other_player(self):
-        # Check all directions for a win condition for the other player
-        directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-        
-        # Iterate through the board
-        for row in range(6):
-            for col in range(6):
-                # Check only if the button is non-empty (colored)
-                if self.board[row, col] == 3 - self.current_player:
-                    for dr, dc in directions:
-                        if self.count_aligned(row, col, dr, dc, 3 - self.current_player) >= 5:
-                            return True
-        return False
-
-
 
     def count_aligned(self, row, col, dr, dc, player):
         count = 1
