@@ -1,5 +1,5 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QGridLayout, QPushButton
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QGridLayout, QPushButton, QMessageBox
 from PyQt6.QtGui import QColor
 import numpy as np
 
@@ -16,6 +16,7 @@ class PentagoGame(QWidget):
         ]
 
         self.current_player = 1  # Player 1 starts
+        self.winner = None
         self.valid_move_made = False
         self.game_over = False  # Track whether the game is over
         self.players_won = set()  # Track players who have won
@@ -82,24 +83,26 @@ class PentagoGame(QWidget):
         self.enable_board_buttons()
         self.valid_move_made = False  # Reset the flag for the next player's move
 
-        # Switch to the next player's turn
-        self.current_player = 3 - self.current_player  # Switch between player 1 and player 2
-
         # Check for a win after each rotation
         if self.check_win():
-            self.players_won.add(self.current_player)
-            if len(self.players_won) == 2:
+            if self.check_win_other_player():
                 print("It's a draw!")
                 self.game_over = True
-                # You can perform any additional actions here for a draw condition
             else:
                 print(f"Player {self.current_player} wins!")
+                self.winner = self.current_player
                 self.game_over = True
-                # You can perform any additional actions here for a win condition
+            # Show the result after rotation
+            self.show_result()
+
         elif self.check_draw():
             print("It's a draw!")
             self.game_over = True
-            # You can perform any additional actions here for a draw condition
+            # Show the result after rotation
+            self.show_result()
+        
+        # Switch to the next player's turn
+        self.current_player = 3 - self.current_player  # Switch between player 1 and player 2
 
     def get_corner_ranges(self, corner_index):
         if corner_index == 0:  # Up-left
@@ -163,24 +166,44 @@ class PentagoGame(QWidget):
     def check_win(self):
         # Check all directions for a win condition
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
+        
+        # Iterate through the board
         for row in range(6):
             for col in range(6):
-                for dr, dc in directions:
-                    if self.count_aligned(row, col, dr, dc) >= 5:
-                        return True
+                # Check only if the button is non-empty (colored)
+                if self.board[row, col] == self.current_player:
+                    for dr, dc in directions:
+                        if self.count_aligned(row, col, dr, dc, self.current_player) >= 5:
+                            return True
+        return False
+    
+    def check_win_other_player(self):
+        # Check all directions for a win condition for the other player
+        directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
+        
+        # Iterate through the board
+        for row in range(6):
+            for col in range(6):
+                # Check only if the button is non-empty (colored)
+                if self.board[row, col] == 3 - self.current_player:
+                    for dr, dc in directions:
+                        if self.count_aligned(row, col, dr, dc, 3 - self.current_player) >= 5:
+                            return True
         return False
 
-    def count_aligned(self, row, col, dr, dc):
+
+
+    def count_aligned(self, row, col, dr, dc, player):
         count = 1
-        count += self.count_direction(row, col, dr, dc, 1)
-        count += self.count_direction(row, col, dr, dc, -1)
+        count += self.count_direction(row, col, dr, dc, 1, player)
+        count += self.count_direction(row, col, dr, dc, -1, player)
         return count
 
-    def count_direction(self, row, col, dr, dc, step):
+    def count_direction(self, row, col, dr, dc, step, player):
         count = 0
         for i in range(1, 5):  # Adjusted the range to 5 for a total of 5 pieces
             r, c = row + dr * i * step, col + dc * i * step
-            if 0 <= r < 6 and 0 <= c < 6 and self.board[r, c] == self.current_player:
+            if 0 <= r < 6 and 0 <= c < 6 and self.board[r, c] == player:
                 count += 1
             else:
                 break
@@ -188,6 +211,19 @@ class PentagoGame(QWidget):
 
     def check_draw(self):
         return all(self.board[row, col] != 0 for row in range(6) for col in range(6))
+
+    def show_result(self):
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("Game Over")
+
+        if self.winner:
+            winner = f"Player {self.winner}"
+            msg_box.setText(f"{winner} wins!")
+        else:
+            msg_box.setText("It's a draw!")
+
+        msg_box.exec()
+
 
 def main():
     app = QApplication(sys.argv)
