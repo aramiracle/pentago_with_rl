@@ -135,3 +135,9 @@ class PentagoEnv(gym.Env):
             return False
 
         return True
+    
+    def action_to_move(self, action):
+        # Convert the flattened action index to the corresponding (row, col, rotation) values
+        board_button, rotation = action
+        row, col = divmod(board_button, 6)
+        return row, col, rotation // 2, rotation % 2 == 0

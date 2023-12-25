@@ -101,7 +101,7 @@ class DDQNAgent:
             board_action = random.choice(available_actions)
             rotation_action = random.randint(0, 7)  # Assuming rotation actions are integers from 0 to 7
         else:
-            state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+            state_tensor = state.unsqueeze(0)
             with torch.no_grad():
                 q_values_board, q_values_rotation = self.model(state_tensor)
                 q_values_board = q_values_board.squeeze()
@@ -199,7 +199,7 @@ if __name__ == '__main__':
     agent_vs_agent_train(dqn_agents, env, num_episodes=100000)
 
     os.makedirs('saved_agents', exist_ok=True)
-    
+
     # Save the trained agents
     torch.save({
         'model_state_dict_player1': dqn_agents[0].model.state_dict(),
