@@ -22,6 +22,7 @@ class PentagoGame(QMainWindow):
         self.play_again_button = QPushButton("Play Again")
 
         self.current_player = 1
+        self.human_turn = True  # Flag to indicate whether it's the human player's turn
         self.winner = None
         self.valid_move_made = False
         self.game_over = False
@@ -34,7 +35,6 @@ class PentagoGame(QMainWindow):
 
         layout = QVBoxLayout(central_widget)
 
-        self.board = torch.zeros((6, 6), dtype=int)
         self.board_buttons = [[QPushButton() for _ in range(6)] for _ in range(6)]
 
         board_layout = QGridLayout()
@@ -62,6 +62,7 @@ class PentagoGame(QMainWindow):
                 rotate_button.setStyleSheet("font-size: 18px; font-weight: bold;")
                 rotate_button.setText("↻" if j == 0 else "↺")
                 rotate_button.clicked.connect(lambda _, idx=i, clockwise=j == 0: self.rotate_board_part(idx, clockwise=clockwise))
+                
                 rotate_layout.addWidget(rotate_button, i // 2 * 3 + 1, (i % 2) * 3 + j * 2)
 
         layout.addLayout(rotate_layout)
@@ -105,15 +106,38 @@ class PentagoGame(QMainWindow):
 
         self.show()
 
+    def board_button_clicked(self):
+        if self.game_over:
+            return
+
+        sender_button = self.sender()
+
+        if sender_button and not self.valid_move_made:
+            row, col = self.get_button_position(sender_button)
+
+            if self.agent.env.board[row, col] == 0:
+                self.agent.env.board[row, col] = self.current_player
+
+                # Update the UI together
+                self.update_board_buttons()
+
+                self.disable_board_buttons()
+                self.valid_move_made = True
+
+                # Set the flag to indicate it's the human player's turn
+                self.human_turn = True
+
+    # Modify the rotate_board_part method
     def rotate_board_part(self, corner_index, clockwise=True):
         if self.game_over:
             return
 
         row_range, col_range = self.get_corner_ranges(corner_index)
-        subgrid = self.board[row_range[0]:row_range[1], col_range[0]:col_range[1]]
-        rotated_subgrid = np.rot90(subgrid, 3 if clockwise else 1)
-        rotated_subgrid_tensor = torch.tensor(rotated_subgrid.copy())
-        self.board[row_range[0]:row_range[1], col_range[0]:col_range[1]] = rotated_subgrid_tensor
+        subgrid = self.agent.env.board[row_range[0]:row_range[1], col_range[0]:col_range[1]]
+        rotated_subgrid = np.rot90(subgrid, 3 if clockwise else 1).copy()
+        self.agent.env.board[row_range[0]:row_range[1], col_range[0]:col_range[1]] = torch.tensor(rotated_subgrid)
+
+        # Update the UI together
         self.update_board_buttons()
 
         self.enable_board_buttons()
@@ -121,8 +145,35 @@ class PentagoGame(QMainWindow):
 
         self.check_game_over()
 
-        # Switch the turn before checking for win or draw
+        # Switch the turn after checking for win or draw
         self.current_player = 3 - self.current_player
+
+        if self.human_turn:
+            # If it's the human player's turn, schedule the AI's turn after a delay
+            QTimer.singleShot(500, self.play_ai_turn)
+            self.human_turn = False
+        else:
+            # If it's the AI's turn, enable the board buttons for the AI's move
+            self.enable_board_buttons()
+
+    def get_button_position(self, button):
+        for row in range(6):
+            for col in range(6):
+                if self.board_buttons[row][col] == button:
+                    return row, col
+        return None, None
+
+    def update_board_buttons(self):
+        # Update the board buttons based on the environment's board
+        for row in range(6):
+            for col in range(6):
+                button = self.board_buttons[row][col]
+                value = self.agent.env.board[row, col]
+                color = 'blue' if value == 1 else 'red' if value == 2 else '#e0e0e0'
+                button.setStyleSheet(
+                    f"background-color: {color}; "
+                    "border: 1px solid black; border-radius: 30px; color: black;"
+                )
 
     def get_corner_ranges(self, corner_index):
         if corner_index == 0:
@@ -138,38 +189,12 @@ class PentagoGame(QMainWindow):
         for row in range(6):
             for col in range(6):
                 button = self.board_buttons[row][col]
-                value = self.board[row, col]
+                value = self.agent.env.board[row, col]
                 color = 'blue' if value == 1 else 'red' if value == 2 else '#e0e0e0'
                 button.setStyleSheet(
                     f"background-color: {color}; "
                     "border: 1px solid black; border-radius: 30px; color: black;"
                 )
-
-    def board_button_clicked(self):
-        if self.game_over:
-            return
-
-        sender_button = self.sender()
-
-        if sender_button and not self.valid_move_made:
-            row, col = self.get_button_position(sender_button)
-
-            if self.board[row, col] == 0:
-                self.board[row, col] = self.current_player
-                self.toggle_color()
-                self.update_board_buttons()
-
-                self.disable_board_buttons()
-                self.valid_move_made = True
-
-    def toggle_color(self):
-        self.current_color = QColor('blue') if self.current_color == QColor('red') else QColor('red')
-
-    def get_button_position(self, button):
-        for i in range(6):
-            for j in range(6):
-                if self.board_buttons[i][j] == button:
-                    return i, j
 
     def disable_board_buttons(self):
         for row in range(6):
@@ -180,36 +205,6 @@ class PentagoGame(QMainWindow):
         for row in range(6):
             for col in range(6):
                 self.board_buttons[row][col].setEnabled(True)
-
-    def check_win(self, player):
-        directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-        
-        for row in range(6):
-            for col in range(6):
-                if self.board[row, col] == player:
-                    for dr, dc in directions:
-                        if self.count_aligned(row, col, dr, dc, player) >= 5:
-                            return True
-        return False
-    
-    def count_aligned(self, row, col, dr, dc, player):
-        count = 1
-        count += self.count_direction(row, col, dr, dc, 1, player)
-        count += self.count_direction(row, col, dr, dc, -1, player)
-        return count
-
-    def count_direction(self, row, col, dr, dc, step, player):
-        count = 0
-        for i in range(1, 5):
-            r, c = row + dr * i * step, col + dc * i * step
-            if 0 <= r < 6 and 0 <= c < 6 and self.board[r, c] == player:
-                count += 1
-            else:
-                break
-        return count
-
-    def check_draw(self):
-        return all(self.board[row, col] != 0 for row in range(6) for col in range(6))
 
     def start_game(self):
         self.game_over = False
@@ -232,8 +227,13 @@ class PentagoGame(QMainWindow):
             self.play_ai_turn()
 
     def select_agent(self):
+        # Disable board buttons and rotation buttons
+        self.disable_board_buttons()
+        self.disable_rotation_buttons()
+
         agent_type, ok = QInputDialog.getItem(self, "Select Agent Type", 
                                             "Choose an agent:", ["DDQN"], 0, False)
+
         if ok and agent_type:
             if agent_type == "DDQN":
                 if self.current_player == 1:
@@ -242,6 +242,19 @@ class PentagoGame(QMainWindow):
                 else:
                     self.agent = DDQNAgent(PentagoEnv())
                     self.load_agent('saved_agents/ddqn_agents_after_train.pth', player=1)
+
+                # Enable board buttons and rotation buttons after selecting the agent
+                self.enable_board_buttons()
+                self.enable_rotation_buttons()
+            else:
+                # Enable buttons if the agent type is not recognized
+                self.enable_board_buttons()
+                self.enable_rotation_buttons()
+                self.status_label.setText("Invalid agent type selected.")
+        else:
+            # Enable buttons if the agent selection is canceled
+            self.enable_board_buttons()
+            self.enable_rotation_buttons()
 
     def load_agent(self, filepath, player):
         try:
@@ -279,23 +292,18 @@ class PentagoGame(QMainWindow):
         row, col, rotation, clockwise = self.agent.env.action_to_move(action)
 
         # Update the game state with the selected move
-        self.board[row, col] = self.current_player
+        self.agent.env.board[row, col] = self.current_player
         self.rotate_board_part(rotation, clockwise)
-
-        # Update the board buttons and toggle the color
-        self.update_board_buttons()
-        self.toggle_color()
-
-        # Update the UI to highlight the AI's move
-        self.update_ui(action)
 
         # Check for a win or draw after the AI move
         self.check_game_over()
 
+        # Update the board buttons and UI
+        self.update_board_buttons()
+
         # Enable board buttons and rotation buttons after AI's turn
         self.enable_board_buttons()
         self.enable_rotation_buttons()
-
 
     def disable_rotation_buttons(self):
         for i in range(4):
@@ -313,41 +321,11 @@ class PentagoGame(QMainWindow):
         else:
             self.status_label.setText("No agent is loaded.")
             return None
-        
-    def update_game_state(self, action):
-        # Convert the flattened action index to the corresponding (row, col, rotation) values
-        row, col, rotation, clockwise = self.agent.env.action_to_move(action)
-
-        # Update the game state with the selected move
-        self.board[row, col] = self.current_player
-        self.rotate_board_part(rotation, clockwise)
-
-        # Update the board buttons and toggle the color
-        self.update_board_buttons()
-        self.toggle_color()
-
-    def update_ui(self, action):
-        row, col, rotation, clockwise = self.agent.env.action_to_move(action)
-        
-        # Change the color of the selected button
-        button = self.board_buttons[row][col]
-        button.setStyleSheet(f"background-color: {self.current_color.name()}; "
-                            "border: 1px solid black; border-radius: 30px; color: black;")
-
-        # Update the UI to highlight the AI's move with a delay
-        QTimer.singleShot(1000, lambda: self.delayed_rotate_board(rotation, clockwise))
-
-    def delayed_rotate_board(self, rotation, clockwise):
-        # Rotate the board part after the delay
-        self.rotate_board_part(rotation, clockwise)
-
-        # Update the board buttons and toggle the color
-        self.update_board_buttons()
 
     def check_game_over(self):
         # Check for a win or draw after the current move
-        if self.check_win(self.current_player):
-            if self.check_win(3 - self.current_player):
+        if self.agent.env.check_win(self.current_player):
+            if self.agent.env.check_win(3 - self.current_player):
                 print("It's a draw!")
                 self.game_over = True
                 self.show_result()
@@ -356,7 +334,7 @@ class PentagoGame(QMainWindow):
                 self.winner = self.current_player
                 self.game_over = True
                 self.show_result()
-        elif self.check_draw():
+        elif self.agent.env.check_draw():
             print("It's a draw!")
             self.game_over = True
             self.show_result()
