@@ -22,7 +22,7 @@ class PentagoGame(QMainWindow):
         self.play_again_button = QPushButton("Play Again")
 
         self.current_player = 1
-        self.human_turn = True  # Flag to indicate whether it's the human player's turn
+        self.human_turn = False  # Flag to indicate whether it's the human player's turn
         self.winner = None
         self.valid_move_made = False
         self.game_over = False
@@ -213,8 +213,14 @@ class PentagoGame(QMainWindow):
         self.current_player = 1 if self.first_player_button.isChecked() else 2
         self.enable_board_buttons()
 
-        if self.current_player == 2:
-            self.play_ai_turn()
+        # Update human_turn based on the selected player
+        self.human_turn = self.current_player == 1
+
+        if not self.human_turn:
+            # If AI plays first, initiate AI's turn
+            QTimer.singleShot(500, self.play_ai_turn)
+        else:
+            self.status_label.setText("It's your turn.")
 
     def play_again(self):
         self.game_over = False
@@ -291,7 +297,7 @@ class PentagoGame(QMainWindow):
         action = self.ai_select_move()
         row, col, rotation, clockwise = self.agent.env.action_to_move(action)
 
-        # Update the game state with the selected move
+        # Update the game state with the selected move only for the AI player
         self.agent.env.board[row, col] = self.current_player
         self.rotate_board_part(rotation, clockwise)
 
