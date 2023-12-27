@@ -226,11 +226,24 @@ class PentagoGame(QMainWindow):
         self.game_over = False
         self.players_won = set()
         self.status_label.setText("")
+        
+        # Reset the Pentago environment
+        self.reset_board()
+
+        # Update the UI
+        self.update_board_buttons()
         self.enable_board_buttons()
+
         self.current_player = 1 if self.first_player_button.isChecked() else 2
 
         if self.current_player == 2:
-            self.play_ai_turn()
+            # If the second player is an AI, initiate AI's turn
+            QTimer.singleShot(500, self.play_ai_turn)
+
+    # Add the following method to your PentagoGame class to reset the board:
+    def reset_board(self):
+        self.agent.env.reset()
+        self.update_board_buttons()
 
     def select_agent(self):
         # Disable board buttons and rotation buttons
