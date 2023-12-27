@@ -153,24 +153,34 @@ def agent_vs_agent_train(agents, env, num_episodes=1000, epsilon_start=0.5, epsi
 
     env.close()
 
+# Function to load a saved agent for DDQN2Agent
+def load_ddqn2_agent(agent, checkpoint_path, player_name):
+    checkpoint = torch.load(checkpoint_path)
+    agent.model.load_state_dict(checkpoint[f'model_state_dict_{player_name}'])
+    agent.target_model.load_state_dict(checkpoint[f'target_model_state_dict_{player_name}'])
+    agent.optimizer.load_state_dict(checkpoint[f'optimizer_state_dict_{player_name}'])
+
 # Example usage:
 if __name__ == '__main__':
-    env = PentagoEnv2() # Assuming PentagoGame implements the necessary environment methods
+    env = PentagoEnv2()  # Assuming PentagoGame implements the necessary environment methods
 
     # Players
-    dqn_agents = [DDQN2Agent(env), DDQN2Agent(env)]
+    ddqn_agents = [DDQN2Agent(env), DDQN2Agent(env)]
 
-    # Agent vs Agent Training
-    agent_vs_agent_train(dqn_agents, env, num_episodes=100000)
+    # Load pre-trained agents
+    checkpoint_path = 'saved_agents/ddqn2_agents_after_train.pth'
+    for i, agent in enumerate(ddqn_agents):
+        load_ddqn2_agent(agent, checkpoint_path, f'player{i + 1}')
 
-    os.makedirs('saved_agents', exist_ok=True)
+    # Continue training
+    agent_vs_agent_train(ddqn_agents, env, num_episodes=100000)
 
     # Save the trained agents
     torch.save({
-        'model_state_dict_player1': dqn_agents[0].model.state_dict(),
-        'target_model_state_dict_player1': dqn_agents[0].target_model.state_dict(),
-        'optimizer_state_dict_player1': dqn_agents[0].optimizer.state_dict(),
-        'model_state_dict_player2': dqn_agents[1].model.state_dict(),
-        'target_model_state_dict_player2': dqn_agents[1].target_model.state_dict(),
-        'optimizer_state_dict_player2': dqn_agents[1].optimizer.state_dict(),
-    }, 'saved_agents/ddqn2_agents_after_train.pth')
+        'model_state_dict_player1': ddqn_agents[0].model.state_dict(),
+        'target_model_state_dict_player1': ddqn_agents[0].target_model.state_dict(),
+        'optimizer_state_dict_player1': ddqn_agents[0].optimizer.state_dict(),
+        'model_state_dict_player2': ddqn_agents[1].model.state_dict(),
+        'target_model_state_dict_player2': ddqn_agents[1].target_model.state_dict(),
+        'optimizer_state_dict_player2': ddqn_agents[1].optimizer.state_dict(),
+    }, 'saved_agents/ddqn2_agents_after_continue_train.pth')
