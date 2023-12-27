@@ -63,11 +63,11 @@ if __name__ == '__main__':
 
     # Load AI agent
     ai_agent_player1 = Hybrid2Agent(env)
-    checkpoint_player1 = torch.load('saved_agents/ddqn2_agents_after_train.pth')
+    checkpoint_player1 = torch.load('saved_agents/hybrid2_agents_after_train.pth')
     ai_agent_player1.target_model.load_state_dict(checkpoint_player1['model_state_dict_player1'])
 
     ai_agent_player2 = Hybrid2Agent(env)
-    checkpoint_player2 = torch.load('saved_agents/ddqn2_agents_after_train.pth')
+    checkpoint_player2 = torch.load('saved_agents/hybridgit2_agents_after_train.pth')
     ai_agent_player2.target_model.load_state_dict(checkpoint_player2['model_state_dict_player2'])
 
     # Create RandomBot

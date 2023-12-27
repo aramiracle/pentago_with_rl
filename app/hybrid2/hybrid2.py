@@ -185,7 +185,7 @@ if __name__ == '__main__':
     dqn_agents = [Hybrid2Agent(env), Hybrid2Agent(env)]
 
     # Load pre-trained agents
-    checkpoint_path = 'saved_agents/hybrid_agents_after_train.pth'
+    checkpoint_path = 'saved_agents/hybrid2_agents_after_train.pth'
     for i, agent in enumerate(dqn_agents):
         load_agent(agent, checkpoint_path, f'player{i + 1}')
 
@@ -202,4 +202,4 @@ if __name__ == '__main__':
         'model_state_dict_player2': dqn_agents[1].model.state_dict(),
         'target_model_state_dict_player2': dqn_agents[1].target_model.state_dict(),
         'optimizer_state_dict_player2': dqn_agents[1].optimizer.state_dict(),
-    }, 'saved_agents/hybrid_agents_after_continue_train.pth')
+    }, 'saved_agents/hybrid2_agents_after_continue_train.pth')

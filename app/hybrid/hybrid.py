@@ -223,12 +223,12 @@ if __name__ == '__main__':
     ddqn_agents = [HybridAgent(env), HybridAgent(env)]
 
     # Load pre-trained agents
-    checkpoint_path = 'saved_agents/ddqn_agents_after_train.pth'
+    checkpoint_path = 'saved_agents/hybrid_agents_after_train.pth'
     for i, agent in enumerate(ddqn_agents):
         load_ddqn_agent(agent, checkpoint_path, f'player{i + 1}')
 
     # Continue training
-    agent_vs_agent_train(ddqn_agents, env, num_episodes=100000)
+    agent_vs_agent_train(ddqn_agents, env, num_episodes=30000)
 
     # Save the trained agents
     torch.save({
@@ -238,5 +238,5 @@ if __name__ == '__main__':
         'model_state_dict_player2': ddqn_agents[1].model.state_dict(),
         'target_model_state_dict_player2': ddqn_agents[1].target_model.state_dict(),
         'optimizer_state_dict_player2': ddqn_agents[1].optimizer.state_dict(),
-    }, 'saved_agents/ddqnd_agents_after_continue_train.pth')
+    }, 'saved_agents/hybrid_agents_after_continue_train.pth')
 

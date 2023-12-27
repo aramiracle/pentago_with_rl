@@ -203,7 +203,7 @@ if __name__ == '__main__':
     ddqn_agents = [DDQNAgent(env), DDQNAgent(env)]
 
     # Load pre-trained agents
-    checkpoint_path = 'saved_agents/ddqnd_agents_after_train.pth'
+    checkpoint_path = 'saved_agents/ddqn_agents_after_train.pth'
     for i, agent in enumerate(ddqn_agents):
         load_ddqn_agent(agent, checkpoint_path, f'player{i + 1}')
 
@@ -218,5 +218,5 @@ if __name__ == '__main__':
         'model_state_dict_player2': ddqn_agents[1].model.state_dict(),
         'target_model_state_dict_player2': ddqn_agents[1].target_model.state_dict(),
         'optimizer_state_dict_player2': ddqn_agents[1].optimizer.state_dict(),
-    }, 'saved_agents/ddqnd_agents_after_continue_train.pth')
+    }, 'saved_agents/ddqn_agents_after_continue_train.pth')
 
