@@ -4,11 +4,11 @@ from PyQt6.QtWidgets import QMainWindow, QApplication, QLabel, QWidget, QVBoxLay
 from PyQt6.QtGui import QColor
 from PyQt6.QtCore import Qt, QTimer
 import numpy as np
-from environment import PentagoEnv
-from environment2 import PentagoEnv2
-from ddqn import DDQNAgent
-from ddqn2 import DDQN2Agent
-from hybrid import HybridAgent
+from app.environment import PentagoEnv
+from app.environment2 import PentagoEnv2
+from app.ddqn.ddqn import DDQNAgent
+from app.ddqn2.ddqn2 import DDQN2Agent
+from app.hybrid.hybrid import HybridAgent
 
 class PentagoGame(QMainWindow):
     def __init__(self):

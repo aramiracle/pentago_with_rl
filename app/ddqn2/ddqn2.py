@@ -6,27 +6,16 @@ import torch.optim as optim
 from collections import namedtuple, deque
 from tqdm import tqdm
 import random
-from environment import PentagoEnv
+from app.environment2 import PentagoEnv2
 
-# Define the Dueling DQN model using PyTorch
+# Modify the model output to have a single output for the combined action space
 class DuelingDQN(nn.Module):
     def __init__(self):
         super(DuelingDQN, self).__init__()
         # Shared layers
-        self.fc1_shared = nn.Linear(6 * 6 * 3, 256)
-        self.fc2_shared = nn.Linear(256, 128)
-        
-        # Value stream layers
-        self.fc3_value = nn.Linear(128, 64)
-        self.fc4_value = nn.Linear(64, 1)
-
-        # Advantage stream layers for board button actions
-        self.fc3_advantage_board = nn.Linear(128, 64)
-        self.fc4_advantage_board = nn.Linear(64, 36)  # Assuming there are 36 board button actions
-
-        # Advantage stream layers for rotation actions
-        self.fc3_advantage_rotation = nn.Linear(128, 64)
-        self.fc4_advantage_rotation = nn.Linear(64, 8)  # Assuming there are 8 rotation actions
+        self.fc1 = nn.Linear(6 * 6 * 3, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(256, 36 * 8)  # Assuming 36 * 8 possible actions
 
     def forward(self, x):
         x = x.long()
@@ -34,28 +23,13 @@ class DuelingDQN(nn.Module):
         x = x.view(-1, 6 * 6 * 3)
 
         # Shared layers
-        x_shared = F.relu(self.fc1_shared(x))
-        x_shared = F.relu(self.fc2_shared(x_shared))
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
 
-        # Value stream
-        x_value = F.relu(self.fc3_value(x_shared))
-        value = self.fc4_value(x_value)
+        # Combined stream
+        x = F.relu(self.fc3(x))
 
-        # Advantage stream for board button actions
-        x_advantage_board = F.relu(self.fc3_advantage_board(x_shared))
-        advantage_board = self.fc4_advantage_board(x_advantage_board)
-
-        # Advantage stream for rotation actions
-        x_advantage_rotation = F.relu(self.fc3_advantage_rotation(x_shared))
-        advantage_rotation = self.fc4_advantage_rotation(x_advantage_rotation)
-
-        # Combine value and advantage to get Q-values for board button actions
-        q_values_board = value + (advantage_board - advantage_board.mean(dim=1, keepdim=True))
-
-        # Combine value and advantage to get Q-values for rotation actions
-        q_values_rotation = value + (advantage_rotation - advantage_rotation.mean(dim=1, keepdim=True))
-
-        return q_values_board, q_values_rotation
+        return x
 
 # Implement experience replay buffer
 Experience = namedtuple('Experience', ('state', 'action', 'reward', 'next_state', 'done'))
@@ -77,7 +51,7 @@ class ExperienceReplayBuffer:
         return len(self.buffer)
 
 # Define the DQN agent
-class DDQNAgent:
+class DDQN2Agent:
     def __init__(self, env, buffer_capacity=1000000, batch_size=64, target_update_frequency=10):
         self.env = env
         self.model = DuelingDQN()  # Change here
@@ -98,59 +72,50 @@ class DDQNAgent:
         self.model.eval()
 
         if random.random() < epsilon:
-            board_action = random.choice(available_actions)
-            rotation_action = random.randint(0, 7)  # Assuming rotation actions are integers from 0 to 7
+            # Randomly choose an action
+            action = random.choice(available_actions)
         else:
             state_tensor = state.unsqueeze(0)
             with torch.no_grad():
-                q_values_board, q_values_rotation = self.model(state_tensor)
-                q_values_board = q_values_board.squeeze()
+                q_values_combined = self.model(state_tensor).squeeze()
 
             # Mask the Q-values of invalid actions with a very negative number
-            masked_board_q_values = torch.full(q_values_board.shape, float('-inf'))
-            masked_board_q_values[available_actions] = q_values_board[available_actions]
+            masked_q_values = torch.full(q_values_combined.shape, float('-inf'))
+            masked_q_values[available_actions] = q_values_combined[available_actions]
 
-            # Get the board action with the highest Q-value among the valid actions
-            board_action = torch.argmax(masked_board_q_values).item()
-
-            # Get the rotation action with the highest Q-value
-            rotation_action = torch.argmax(q_values_rotation).item()
+            # Get the combined action with the highest Q-value among the valid actions
+            action = torch.argmax(masked_q_values).item()
 
         # Ensure the model is back in training mode
         self.model.train()
 
-        return board_action, rotation_action
+        return action
 
     def train_step(self):
         if len(self.buffer) >= self.batch_size:
-            
-            experiences = list(self.buffer.sample(self.batch_size))  # Convert to list for better indexing
+            experiences = list(self.buffer.sample(self.batch_size))
             states, actions, rewards, next_states, dones = zip(*experiences)
 
             states = torch.stack(states)
             next_states = torch.stack(next_states)
             rewards = torch.tensor(rewards, dtype=torch.float32)
-            actions = torch.tensor(actions, dtype=torch.int64)
+            
+            # Convert actions to tensor and reshape to (batch_size, 1)
+            actions = torch.tensor(actions, dtype=torch.int64).unsqueeze(1)
+
             dones = torch.tensor(dones, dtype=torch.float32)
 
             # Use target model for action selection in Double Q-learning
-            target_actions_board = self.model(next_states)[0].max(1)[1].unsqueeze(-1)
-            target_actions_rotation = self.model(next_states)[1].max(1)[1].unsqueeze(-1)
-            
-            max_next_q_values_board = self.target_model(next_states)[0].gather(1, target_actions_board).squeeze(-1)
-            max_next_q_values_rotation = self.target_model(next_states)[1].gather(1, target_actions_rotation).squeeze(-1)
+            target_actions = self.model(next_states).max(1)[1].unsqueeze(-1)
+            max_next_q_values = self.target_model(next_states).gather(1, target_actions).squeeze(-1)
 
-            current_q_values_board = self.model(states)[0].gather(1, actions[:, 0].unsqueeze(-1)).squeeze(-1)
-            current_q_values_rotation = self.model(states)[1].gather(1, actions[:, 1].unsqueeze(-1)).squeeze(-1)
-            
-            expected_q_values_board = rewards + (1 - dones) * 0.99 * max_next_q_values_board  # Assuming a gamma of 0.99
-            expected_q_values_rotation = rewards + (1 - dones) * 0.99 * max_next_q_values_rotation  # Assuming a gamma of 0.99
+            current_q_values = self.model(states).gather(1, actions)
+            expected_q_values = rewards + (1 - dones) * 0.99 * max_next_q_values
 
-            loss_board = self.loss_fn(current_q_values_board, expected_q_values_board)
-            loss_rotation = self.loss_fn(current_q_values_rotation, expected_q_values_rotation)
+            loss = self.loss_fn(current_q_values, expected_q_values)
 
             self.optimizer.zero_grad()
-            (loss_board + loss_rotation).backward()
+            loss.backward()
             self.optimizer.step()
 
             if self.num_training_steps % self.target_update_frequency == 0:
@@ -188,8 +153,8 @@ def agent_vs_agent_train(agents, env, num_episodes=1000, epsilon_start=0.5, epsi
 
     env.close()
 
-# Function to load a saved agent for DDQNAgent
-def load_ddqn_agent(agent, checkpoint_path, player_name):
+# Function to load a saved agent for DDQN2Agent
+def load_ddqn2_agent(agent, checkpoint_path, player_name):
     checkpoint = torch.load(checkpoint_path)
     agent.model.load_state_dict(checkpoint[f'model_state_dict_{player_name}'])
     agent.target_model.load_state_dict(checkpoint[f'target_model_state_dict_{player_name}'])
@@ -197,15 +162,15 @@ def load_ddqn_agent(agent, checkpoint_path, player_name):
 
 # Example usage:
 if __name__ == '__main__':
-    env = PentagoEnv()  # Assuming PentagoGame implements the necessary environment methods
+    env = PentagoEnv2()  # Assuming PentagoGame implements the necessary environment methods
 
     # Players
-    ddqn_agents = [DDQNAgent(env), DDQNAgent(env)]
+    ddqn_agents = [DDQN2Agent(env), DDQN2Agent(env)]
 
     # Load pre-trained agents
-    checkpoint_path = 'saved_agents/ddqnd_agents_after_train.pth'
+    checkpoint_path = 'saved_agents/ddqn2_agents_after_train.pth'
     for i, agent in enumerate(ddqn_agents):
-        load_ddqn_agent(agent, checkpoint_path, f'player{i + 1}')
+        load_ddqn2_agent(agent, checkpoint_path, f'player{i + 1}')
 
     # Continue training
     agent_vs_agent_train(ddqn_agents, env, num_episodes=100000)
@@ -218,5 +183,4 @@ if __name__ == '__main__':
         'model_state_dict_player2': ddqn_agents[1].model.state_dict(),
         'target_model_state_dict_player2': ddqn_agents[1].target_model.state_dict(),
         'optimizer_state_dict_player2': ddqn_agents[1].optimizer.state_dict(),
-    }, 'saved_agents/ddqnd_agents_after_continue_train.pth')
-
+    }, 'saved_agents/ddqn2_agents_after_continue_train.pth')

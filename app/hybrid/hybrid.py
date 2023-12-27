@@ -6,7 +6,7 @@ import torch.optim as optim
 from collections import namedtuple, deque
 from tqdm import tqdm
 import random
-from environment2 import PentagoEnv2
+from app.environment2 import PentagoEnv2
 
 # Modify the model output to have a single output for the combined action space
 class DuelingDQN(nn.Module):
@@ -51,7 +51,7 @@ class ExperienceReplayBuffer:
         return len(self.buffer)
 
 # Define the DQN agent
-class DDQN2Agent:
+class HybridAgent:
     def __init__(self, env, buffer_capacity=1000000, batch_size=64, target_update_frequency=10):
         self.env = env
         self.model = DuelingDQN()  # Change here
@@ -72,24 +72,41 @@ class DDQN2Agent:
         self.model.eval()
 
         if random.random() < epsilon:
-            # Randomly choose an action
             action = random.choice(available_actions)
         else:
-            state_tensor = state.unsqueeze(0)
-            with torch.no_grad():
-                q_values_combined = self.model(state_tensor).squeeze()
+            # Check for instant win moves
+            instant_win_actions = []
+            for action in available_actions:
+                if self.is_instant_win(self.env, action):
+                    instant_win_actions.append(action)
+                    break
+            if instant_win_actions:
+                # If there are instant win moves, choose one randomly
+                action = random.choice(instant_win_actions)
+            else:
+                state_tensor = state.unsqueeze(0)  # Adding batch dimension
+                with torch.no_grad():
+                    q_values = self.model(state_tensor).squeeze()
 
-            # Mask the Q-values of invalid actions with a very negative number
-            masked_q_values = torch.full(q_values_combined.shape, float('-inf'))
-            masked_q_values[available_actions] = q_values_combined[available_actions]
+                # Mask the Q-values of invalid actions with a very negative number
+                masked_q_values = torch.full(q_values.shape, float('-inf'))
+                masked_q_values[available_actions] = q_values[available_actions]
 
-            # Get the combined action with the highest Q-value among the valid actions
-            action = torch.argmax(masked_q_values).item()
+                # Get the action with the highest Q-value among the valid actions
+                action = torch.argmax(masked_q_values).item()
 
         # Ensure the model is back in training mode
         self.model.train()
 
         return action
+    
+    def is_instant_win(self, env, action):
+        # Check if the agent has an instant winning move in the next turn
+        next_env = env.clone()
+        next_env.step(action)
+        if next_env.winner is not None:  # Update this line based on your winner identification
+            return True
+        return False
 
     def train_step(self):
         if len(self.buffer) >= self.batch_size:
@@ -153,8 +170,8 @@ def agent_vs_agent_train(agents, env, num_episodes=1000, epsilon_start=0.5, epsi
 
     env.close()
 
-# Function to load a saved agent for DDQN2Agent
-def load_ddqn2_agent(agent, checkpoint_path, player_name):
+# Function to load a saved agent
+def load_agent(agent, checkpoint_path, player_name):
     checkpoint = torch.load(checkpoint_path)
     agent.model.load_state_dict(checkpoint[f'model_state_dict_{player_name}'])
     agent.target_model.load_state_dict(checkpoint[f'target_model_state_dict_{player_name}'])
@@ -165,22 +182,24 @@ if __name__ == '__main__':
     env = PentagoEnv2()  # Assuming PentagoGame implements the necessary environment methods
 
     # Players
-    ddqn_agents = [DDQN2Agent(env), DDQN2Agent(env)]
+    dqn_agents = [HybridAgent(env), HybridAgent(env)]
 
     # Load pre-trained agents
-    checkpoint_path = 'saved_agents/ddqn2_agents_after_train.pth'
-    for i, agent in enumerate(ddqn_agents):
-        load_ddqn2_agent(agent, checkpoint_path, f'player{i + 1}')
+    checkpoint_path = 'saved_agents/hybrid_agents_after_train.pth'
+    for i, agent in enumerate(dqn_agents):
+        load_agent(agent, checkpoint_path, f'player{i + 1}')
+
+    print('Agents Loaded.')
 
     # Continue training
-    agent_vs_agent_train(ddqn_agents, env, num_episodes=100000)
+    agent_vs_agent_train(dqn_agents, env, num_episodes=50000)
 
     # Save the trained agents
     torch.save({
-        'model_state_dict_player1': ddqn_agents[0].model.state_dict(),
-        'target_model_state_dict_player1': ddqn_agents[0].target_model.state_dict(),
-        'optimizer_state_dict_player1': ddqn_agents[0].optimizer.state_dict(),
-        'model_state_dict_player2': ddqn_agents[1].model.state_dict(),
-        'target_model_state_dict_player2': ddqn_agents[1].target_model.state_dict(),
-        'optimizer_state_dict_player2': ddqn_agents[1].optimizer.state_dict(),
-    }, 'saved_agents/ddqn2_agents_after_continue_train.pth')
+        'model_state_dict_player1': dqn_agents[0].model.state_dict(),
+        'target_model_state_dict_player1': dqn_agents[0].target_model.state_dict(),
+        'optimizer_state_dict_player1': dqn_agents[0].optimizer.state_dict(),
+        'model_state_dict_player2': dqn_agents[1].model.state_dict(),
+        'target_model_state_dict_player2': dqn_agents[1].target_model.state_dict(),
+        'optimizer_state_dict_player2': dqn_agents[1].optimizer.state_dict(),
+    }, 'saved_agents/hybrid_agents_after_continue_train.pth')

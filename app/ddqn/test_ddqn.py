@@ -1,8 +1,8 @@
 import random
 import torch
 from tqdm import tqdm
-from ddqn import DDQNAgent
-from environment import PentagoEnv
+from app.ddqn.ddqn import DDQNAgent
+from app.environment import PentagoEnv
 
 class RandomBot:
     def __init__(self, env):
