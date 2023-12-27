@@ -1,8 +1,8 @@
 import random
 import torch
 from tqdm import tqdm
-from ddqn2 import DDQNAgent
-from environment2 import PentagoEnv
+from ddqn2 import DDQN2Agent
+from environment2 import PentagoEnv2
 
 class RandomBot:
     def __init__(self, env):
@@ -41,7 +41,7 @@ def test_ai_vs_random(env, ai_agent, random_bot, num_games=1000):
 
     return ai_wins, random_bot_wins, draws
 
-def random_vs_ai(env, ai_agent, random_bot, num_games=1000):
+def test_random_vs_ai(env, random_bot, ai_agent, num_games=1000):
     """Tests a random bot against an AI agent over a specified number of games."""
     ai_wins = 0
     random_bot_wins = 0
@@ -59,14 +59,14 @@ def random_vs_ai(env, ai_agent, random_bot, num_games=1000):
     return random_bot_wins, ai_wins, draws
 
 if __name__ == '__main__':
-    env = PentagoEnv()
+    env = PentagoEnv2()
 
     # Load AI agent
-    ai_agent_player1 = DDQNAgent(env)
+    ai_agent_player1 = DDQN2Agent(env)
     checkpoint_player1 = torch.load('saved_agents/ddqn2_agents_after_train.pth')
     ai_agent_player1.target_model.load_state_dict(checkpoint_player1['model_state_dict_player1'])
 
-    ai_agent_player2 = DDQNAgent(env)
+    ai_agent_player2 = DDQN2Agent(env)
     checkpoint_player2 = torch.load('saved_agents/ddqn2_agents_after_train.pth')
     ai_agent_player2.target_model.load_state_dict(checkpoint_player2['model_state_dict_player2'])
 
@@ -75,7 +75,7 @@ if __name__ == '__main__':
 
     # Test scenarios
     ai_vs_random_results = test_ai_vs_random(env, ai_agent_player1, random_bot, num_games=1000)
-    random_vs_ai_results = random_vs_ai(env, random_bot, ai_agent_player2, num_games=1000)
+    random_vs_ai_results = test_random_vs_ai(env, random_bot, ai_agent_player2, num_games=1000)
 
     # Print results
     print(f"AI vs Random Bot Results: AI Wins - {ai_vs_random_results[0]}, Random Bot Wins - {ai_vs_random_results[1]}, Draws - {ai_vs_random_results[2]}")

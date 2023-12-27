@@ -2,7 +2,7 @@ import gym
 import numpy as np
 import torch
 
-class PentagoEnv(gym.Env):
+class PentagoEnv2(gym.Env):
     def __init__(self):
         # Initialize the Pentago board as a 6x6 grid
         self.board = torch.zeros((6, 6), dtype=int)
@@ -53,6 +53,7 @@ class PentagoEnv(gym.Env):
             if self.check_win(3 - self.current_player):
                 return 50.0, True, {'winner': 'Draw'}
             else:
+                self.winner = self.current_player
                 return 100.0, True, {'winner': f'Player {self.current_player}'}
         elif self.check_draw():
             return 50.0, True, {'winner': 'Draw'}
@@ -135,8 +136,18 @@ class PentagoEnv(gym.Env):
             return False
 
         return True
-
     
-    def action_to_board_rotation(self, action):
-        # Convert the flattened action index to (board_button, rotation)
-        return divmod(action, 36)
+    def action_to_move(self, action):
+        # Convert the flattened action index to the corresponding (row, col, rotation) values
+        board_button, rotation = divmod(action, 8)
+        row, col = divmod(board_button, 6)
+        return row, col, rotation // 2, rotation % 2 == 0
+
+    def clone(self):
+        new_env = PentagoEnv2()
+        new_env.board = self.board.clone()
+        new_env.current_player = self.current_player
+        new_env.winner = self.winner
+        new_env.last_row = self.last_row
+        new_env.last_col = self.last_col
+        return new_env

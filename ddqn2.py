@@ -6,7 +6,7 @@ import torch.optim as optim
 from collections import namedtuple, deque
 from tqdm import tqdm
 import random
-from environment2 import PentagoEnv
+from environment2 import PentagoEnv2
 
 # Modify the model output to have a single output for the combined action space
 class DuelingDQN(nn.Module):
@@ -51,7 +51,7 @@ class ExperienceReplayBuffer:
         return len(self.buffer)
 
 # Define the DQN agent
-class DDQNAgent:
+class DDQN2Agent:
     def __init__(self, env, buffer_capacity=1000000, batch_size=64, target_update_frequency=10):
         self.env = env
         self.model = DuelingDQN()  # Change here
@@ -155,13 +155,13 @@ def agent_vs_agent_train(agents, env, num_episodes=1000, epsilon_start=0.5, epsi
 
 # Example usage:
 if __name__ == '__main__':
-    env = PentagoEnv() # Assuming PentagoGame implements the necessary environment methods
+    env = PentagoEnv2() # Assuming PentagoGame implements the necessary environment methods
 
     # Players
-    dqn_agents = [DDQNAgent(env), DDQNAgent(env)]
+    dqn_agents = [DDQN2Agent(env), DDQN2Agent(env)]
 
     # Agent vs Agent Training
-    agent_vs_agent_train(dqn_agents, env, num_episodes=10000)
+    agent_vs_agent_train(dqn_agents, env, num_episodes=100000)
 
     os.makedirs('saved_agents', exist_ok=True)
 

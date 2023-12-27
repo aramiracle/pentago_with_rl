@@ -5,7 +5,10 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtCore import Qt, QTimer
 import numpy as np
 from environment import PentagoEnv
+from environment2 import PentagoEnv2
 from ddqn import DDQNAgent
+from ddqn2 import DDQN2Agent
+from hybrid import HybridAgent
 
 class PentagoGame(QMainWindow):
     def __init__(self):
@@ -251,7 +254,7 @@ class PentagoGame(QMainWindow):
         self.disable_rotation_buttons()
 
         agent_type, ok = QInputDialog.getItem(self, "Select Agent Type", 
-                                            "Choose an agent:", ["DDQN"], 0, False)
+                                            "Choose an agent:", ["DDQN", "DDQN2", "Hybrid"], 0, False)
 
         if ok and agent_type:
             if agent_type == "DDQN":
@@ -261,15 +264,25 @@ class PentagoGame(QMainWindow):
                 else:
                     self.agent = DDQNAgent(PentagoEnv())
                     self.load_agent('saved_agents/ddqn_agents_after_train.pth', player=1)
+            elif agent_type == "DDQN2":
+                if self.current_player == 1:
+                    self.agent = DDQN2Agent(PentagoEnv2())
+                    self.load_agent('saved_agents/ddqn2_agents_after_train.pth', player=2)
+                else:
+                    self.agent = DDQN2Agent(PentagoEnv2())
+                    self.load_agent('saved_agents/ddqn2_agents_after_train.pth', player=1)
+            elif agent_type == "Hybrid":
+                if self.current_player == 1:
+                    self.agent = HybridAgent(PentagoEnv2())
+                    self.load_agent('saved_agents/Hybrid_agents_after_train.pth', player=2)
+                else:
+                    self.agent = HybridAgent(PentagoEnv2())
+                    self.load_agent('saved_agents/Hybrid_agents_after_train.pth', player=1)
 
-                # Enable board buttons and rotation buttons after selecting the agent
-                self.enable_board_buttons()
-                self.enable_rotation_buttons()
-            else:
-                # Enable buttons if the agent type is not recognized
-                self.enable_board_buttons()
-                self.enable_rotation_buttons()
-                self.status_label.setText("Invalid agent type selected.")
+            # Enable buttons if the agent type is not recognized
+            self.enable_board_buttons()
+            self.enable_rotation_buttons()
+            self.status_label.setText("Invalid agent type selected.")
         else:
             # Enable buttons if the agent selection is canceled
             self.enable_board_buttons()
@@ -279,6 +292,24 @@ class PentagoGame(QMainWindow):
         try:
             # Load the agent based on its type and player
             if isinstance(self.agent, DDQNAgent):
+                # Load DQN agent
+                checkpoint = torch.load(filepath)
+                if player == 1:
+                    self.agent.model.load_state_dict(checkpoint['model_state_dict_player1'])
+                    self.agent.target_model.load_state_dict(checkpoint['target_model_state_dict_player1'])
+                elif player == 2:
+                    self.agent.model.load_state_dict(checkpoint['model_state_dict_player2'])
+                    self.agent.target_model.load_state_dict(checkpoint['target_model_state_dict_player2'])
+            elif isinstance(self.agent, DDQN2Agent):
+                # Load DQN agent
+                checkpoint = torch.load(filepath)
+                if player == 1:
+                    self.agent.model.load_state_dict(checkpoint['model_state_dict_player1'])
+                    self.agent.target_model.load_state_dict(checkpoint['target_model_state_dict_player1'])
+                elif player == 2:
+                    self.agent.model.load_state_dict(checkpoint['model_state_dict_player2'])
+                    self.agent.target_model.load_state_dict(checkpoint['target_model_state_dict_player2'])
+            elif isinstance(self.agent, HybridAgent):
                 # Load DQN agent
                 checkpoint = torch.load(filepath)
                 if player == 1:
@@ -336,6 +367,10 @@ class PentagoGame(QMainWindow):
 
     def ai_select_move(self):
         if  isinstance(self.agent, DDQNAgent):
+            return self.agent.select_action(self.agent.env.board, epsilon=0)
+        elif  isinstance(self.agent, DDQN2Agent):
+            return self.agent.select_action(self.agent.env.board, epsilon=0)
+        elif  isinstance(self.agent, HybridAgent):
             return self.agent.select_action(self.agent.env.board, epsilon=0)
         else:
             self.status_label.setText("No agent is loaded.")

@@ -56,6 +56,7 @@ class PentagoEnv(gym.Env):
             if self.check_win(3 - self.current_player):
                 return 50.0, True, {'winner': 'Draw'}
             else:
+                self.winner = self.current_player
                 return 100.0, True, {'winner': f'Player {self.current_player}'}
         elif self.check_draw():
             return 50.0, True, {'winner': 'Draw'}
