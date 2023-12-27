@@ -192,7 +192,7 @@ if __name__ == '__main__':
     print('Agents Loaded.')
 
     # Continue training
-    agent_vs_agent_train(dqn_agents, env, num_episodes=50000)
+    agent_vs_agent_train(dqn_agents, env, num_episodes=30000)
 
     # Save the trained agents
     torch.save({
