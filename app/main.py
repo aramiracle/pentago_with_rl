@@ -9,6 +9,7 @@ from app.environment2 import PentagoEnv2
 from app.ddqn.ddqn import DDQNAgent
 from app.ddqn2.ddqn2 import DDQN2Agent
 from app.hybrid.hybrid import HybridAgent
+from app.hybrid2.hybrid2 import Hybrid2Agent
 
 class PentagoGame(QMainWindow):
     def __init__(self):
@@ -254,7 +255,7 @@ class PentagoGame(QMainWindow):
         self.disable_rotation_buttons()
 
         agent_type, ok = QInputDialog.getItem(self, "Select Agent Type", 
-                                            "Choose an agent:", ["DDQN", "DDQN2", "Hybrid"], 0, False)
+                                            "Choose an agent:", ["DDQN", "DDQN2", "Hybrid", "Hybrid2"], 0, False)
 
         if ok and agent_type:
             if agent_type == "DDQN":
@@ -273,20 +274,24 @@ class PentagoGame(QMainWindow):
                     self.load_agent('saved_agents/ddqn2_agents_after_train.pth', player=1)
             elif agent_type == "Hybrid":
                 if self.current_player == 1:
-                    self.agent = HybridAgent(PentagoEnv2())
-                    self.load_agent('saved_agents/Hybrid_agents_after_train.pth', player=2)
+                    self.agent = HybridAgent(PentagoEnv())
+                    self.load_agent('saved_agents/hybrid_agents_after_train.pth', player=2)
                 else:
-                    self.agent = HybridAgent(PentagoEnv2())
-                    self.load_agent('saved_agents/Hybrid_agents_after_train.pth', player=1)
+                    self.agent = HybridAgent(PentagoEnv())
+                    self.load_agent('saved_agents/hybrid_agents_after_train.pth', player=1)
+            elif agent_type == "Hybrid2":
+                if self.current_player == 1:
+                    self.agent = Hybrid2Agent(PentagoEnv2())
+                    self.load_agent('saved_agents/hybrid2_agents_after_train.pth', player=2)
+                else:
+                    self.agent = Hybrid2Agent(PentagoEnv2())
+                    self.load_agent('saved_agents/hybrid2_agents_after_train.pth', player=1)
 
             # Enable buttons if the agent type is not recognized
             self.enable_board_buttons()
             self.enable_rotation_buttons()
-            self.status_label.setText("Invalid agent type selected.")
         else:
-            # Enable buttons if the agent selection is canceled
-            self.enable_board_buttons()
-            self.enable_rotation_buttons()
+            self.status_label.setText("Invalid agent type selected.")
 
     def load_agent(self, filepath, player):
         try:
@@ -310,6 +315,15 @@ class PentagoGame(QMainWindow):
                     self.agent.model.load_state_dict(checkpoint['model_state_dict_player2'])
                     self.agent.target_model.load_state_dict(checkpoint['target_model_state_dict_player2'])
             elif isinstance(self.agent, HybridAgent):
+                # Load DQN agent
+                checkpoint = torch.load(filepath)
+                if player == 1:
+                    self.agent.model.load_state_dict(checkpoint['model_state_dict_player1'])
+                    self.agent.target_model.load_state_dict(checkpoint['target_model_state_dict_player1'])
+                elif player == 2:
+                    self.agent.model.load_state_dict(checkpoint['model_state_dict_player2'])
+                    self.agent.target_model.load_state_dict(checkpoint['target_model_state_dict_player2'])
+            elif isinstance(self.agent, Hybrid2Agent):
                 # Load DQN agent
                 checkpoint = torch.load(filepath)
                 if player == 1:
@@ -371,6 +385,8 @@ class PentagoGame(QMainWindow):
         elif  isinstance(self.agent, DDQN2Agent):
             return self.agent.select_action(self.agent.env.board, epsilon=0)
         elif  isinstance(self.agent, HybridAgent):
+            return self.agent.select_action(self.agent.env.board, epsilon=0)
+        elif  isinstance(self.agent, Hybrid2Agent):
             return self.agent.select_action(self.agent.env.board, epsilon=0)
         else:
             self.status_label.setText("No agent is loaded.")

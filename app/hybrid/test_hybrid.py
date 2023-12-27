@@ -1,8 +1,8 @@
 import random
 import torch
 from tqdm import tqdm
-from hybrid import HybridAgent
-from environment2 import PentagoEnv2
+from app.hybrid.hybrid import HybridAgent
+from app.environment import PentagoEnv
 
 class RandomBot:
     def __init__(self, env):
@@ -10,7 +10,7 @@ class RandomBot:
 
     def select_action(self, state, epsilon):
         available_actions = self.env.get_valid_actions()
-        return random.choice(available_actions)
+        return (random.choice(available_actions), random.randint(0, 7))
     
 def simulate_game(env, player1, player2):
     """Simulates a single game between two AI agents or an AI agent and a random bot."""
@@ -59,15 +59,15 @@ def test_random_vs_ai(env, random_bot, ai_agent, num_games=1000):
     return random_bot_wins, ai_wins, draws
 
 if __name__ == '__main__':
-    env = PentagoEnv2()
+    env = PentagoEnv()
 
     # Load AI agent
     ai_agent_player1 = HybridAgent(env)
-    checkpoint_player1 = torch.load('saved_agents/ddqn2_agents_after_train.pth')
+    checkpoint_player1 = torch.load('saved_agents/ddqn_agents_after_train.pth')
     ai_agent_player1.target_model.load_state_dict(checkpoint_player1['model_state_dict_player1'])
 
     ai_agent_player2 = HybridAgent(env)
-    checkpoint_player2 = torch.load('saved_agents/ddqn2_agents_after_train.pth')
+    checkpoint_player2 = torch.load('saved_agents/ddqn_agents_after_train.pth')
     ai_agent_player2.target_model.load_state_dict(checkpoint_player2['model_state_dict_player2'])
 
     # Create RandomBot

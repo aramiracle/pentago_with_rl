@@ -6,16 +6,27 @@ import torch.optim as optim
 from collections import namedtuple, deque
 from tqdm import tqdm
 import random
-from app.environment2 import PentagoEnv2
+from app.environment import PentagoEnv
 
-# Modify the model output to have a single output for the combined action space
+# Define the Dueling DQN model using PyTorch
 class DuelingDQN(nn.Module):
     def __init__(self):
         super(DuelingDQN, self).__init__()
         # Shared layers
-        self.fc1 = nn.Linear(6 * 6 * 3, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, 36 * 8)  # Assuming 36 * 8 possible actions
+        self.fc1_shared = nn.Linear(6 * 6 * 3, 256)
+        self.fc2_shared = nn.Linear(256, 128)
+        
+        # Value stream layers
+        self.fc3_value = nn.Linear(128, 64)
+        self.fc4_value = nn.Linear(64, 1)
+
+        # Advantage stream layers for board button actions
+        self.fc3_advantage_board = nn.Linear(128, 64)
+        self.fc4_advantage_board = nn.Linear(64, 36)  # Assuming there are 36 board button actions
+
+        # Advantage stream layers for rotation actions
+        self.fc3_advantage_rotation = nn.Linear(128, 64)
+        self.fc4_advantage_rotation = nn.Linear(64, 8)  # Assuming there are 8 rotation actions
 
     def forward(self, x):
         x = x.long()
@@ -23,13 +34,28 @@ class DuelingDQN(nn.Module):
         x = x.view(-1, 6 * 6 * 3)
 
         # Shared layers
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        x_shared = F.relu(self.fc1_shared(x))
+        x_shared = F.relu(self.fc2_shared(x_shared))
 
-        # Combined stream
-        x = F.relu(self.fc3(x))
+        # Value stream
+        x_value = F.relu(self.fc3_value(x_shared))
+        value = self.fc4_value(x_value)
 
-        return x
+        # Advantage stream for board button actions
+        x_advantage_board = F.relu(self.fc3_advantage_board(x_shared))
+        advantage_board = self.fc4_advantage_board(x_advantage_board)
+
+        # Advantage stream for rotation actions
+        x_advantage_rotation = F.relu(self.fc3_advantage_rotation(x_shared))
+        advantage_rotation = self.fc4_advantage_rotation(x_advantage_rotation)
+
+        # Combine value and advantage to get Q-values for board button actions
+        q_values_board = value + (advantage_board - advantage_board.mean(dim=1, keepdim=True))
+
+        # Combine value and advantage to get Q-values for rotation actions
+        q_values_rotation = value + (advantage_rotation - advantage_rotation.mean(dim=1, keepdim=True))
+
+        return q_values_board, q_values_rotation
 
 # Implement experience replay buffer
 Experience = namedtuple('Experience', ('state', 'action', 'reward', 'next_state', 'done'))
@@ -72,33 +98,40 @@ class HybridAgent:
         self.model.eval()
 
         if random.random() < epsilon:
-            action = random.choice(available_actions)
+            board_action = random.choice(available_actions)
+            rotation_action = random.randint(0, 7)  # Assuming rotation actions are integers from 0 to 7
         else:
-            # Check for instant win moves
             instant_win_actions = []
             for action in available_actions:
-                if self.is_instant_win(self.env, action):
-                    instant_win_actions.append(action)
+                for rotation in range(7):
+                    if self.is_instant_win(self.env, (action, rotation)):
+                        instant_win_actions.append((action, rotation))
+                        break
+                if instant_win_actions:
                     break
             if instant_win_actions:
                 # If there are instant win moves, choose one randomly
-                action = random.choice(instant_win_actions)
+                board_action, rotation_action = instant_win_actions[0]
             else:
-                state_tensor = state.unsqueeze(0)  # Adding batch dimension
+                state_tensor = state.unsqueeze(0)
                 with torch.no_grad():
-                    q_values = self.model(state_tensor).squeeze()
+                    q_values_board, q_values_rotation = self.model(state_tensor)
+                    q_values_board = q_values_board.squeeze()
 
                 # Mask the Q-values of invalid actions with a very negative number
-                masked_q_values = torch.full(q_values.shape, float('-inf'))
-                masked_q_values[available_actions] = q_values[available_actions]
+                masked_board_q_values = torch.full(q_values_board.shape, float('-inf'))
+                masked_board_q_values[available_actions] = q_values_board[available_actions]
 
-                # Get the action with the highest Q-value among the valid actions
-                action = torch.argmax(masked_q_values).item()
+                # Get the board action with the highest Q-value among the valid actions
+                board_action = torch.argmax(masked_board_q_values).item()
+
+                # Get the rotation action with the highest Q-value
+                rotation_action = torch.argmax(q_values_rotation).item()
 
         # Ensure the model is back in training mode
         self.model.train()
 
-        return action
+        return board_action, rotation_action
     
     def is_instant_win(self, env, action):
         # Check if the agent has an instant winning move in the next turn
@@ -110,29 +143,34 @@ class HybridAgent:
 
     def train_step(self):
         if len(self.buffer) >= self.batch_size:
-            experiences = list(self.buffer.sample(self.batch_size))
+            
+            experiences = list(self.buffer.sample(self.batch_size))  # Convert to list for better indexing
             states, actions, rewards, next_states, dones = zip(*experiences)
 
             states = torch.stack(states)
             next_states = torch.stack(next_states)
             rewards = torch.tensor(rewards, dtype=torch.float32)
-            
-            # Convert actions to tensor and reshape to (batch_size, 1)
-            actions = torch.tensor(actions, dtype=torch.int64).unsqueeze(1)
-
+            actions = torch.tensor(actions, dtype=torch.int64)
             dones = torch.tensor(dones, dtype=torch.float32)
 
             # Use target model for action selection in Double Q-learning
-            target_actions = self.model(next_states).max(1)[1].unsqueeze(-1)
-            max_next_q_values = self.target_model(next_states).gather(1, target_actions).squeeze(-1)
+            target_actions_board = self.model(next_states)[0].max(1)[1].unsqueeze(-1)
+            target_actions_rotation = self.model(next_states)[1].max(1)[1].unsqueeze(-1)
+            
+            max_next_q_values_board = self.target_model(next_states)[0].gather(1, target_actions_board).squeeze(-1)
+            max_next_q_values_rotation = self.target_model(next_states)[1].gather(1, target_actions_rotation).squeeze(-1)
 
-            current_q_values = self.model(states).gather(1, actions)
-            expected_q_values = rewards + (1 - dones) * 0.99 * max_next_q_values
+            current_q_values_board = self.model(states)[0].gather(1, actions[:, 0].unsqueeze(-1)).squeeze(-1)
+            current_q_values_rotation = self.model(states)[1].gather(1, actions[:, 1].unsqueeze(-1)).squeeze(-1)
+            
+            expected_q_values_board = rewards + (1 - dones) * 0.99 * max_next_q_values_board  # Assuming a gamma of 0.99
+            expected_q_values_rotation = rewards + (1 - dones) * 0.99 * max_next_q_values_rotation  # Assuming a gamma of 0.99
 
-            loss = self.loss_fn(current_q_values, expected_q_values)
+            loss_board = self.loss_fn(current_q_values_board, expected_q_values_board)
+            loss_rotation = self.loss_fn(current_q_values_rotation, expected_q_values_rotation)
 
             self.optimizer.zero_grad()
-            loss.backward()
+            (loss_board + loss_rotation).backward()
             self.optimizer.step()
 
             if self.num_training_steps % self.target_update_frequency == 0:
@@ -170,8 +208,8 @@ def agent_vs_agent_train(agents, env, num_episodes=1000, epsilon_start=0.5, epsi
 
     env.close()
 
-# Function to load a saved agent
-def load_agent(agent, checkpoint_path, player_name):
+# Function to load a saved agent for DDQNAgent
+def load_ddqn_agent(agent, checkpoint_path, player_name):
     checkpoint = torch.load(checkpoint_path)
     agent.model.load_state_dict(checkpoint[f'model_state_dict_{player_name}'])
     agent.target_model.load_state_dict(checkpoint[f'target_model_state_dict_{player_name}'])
@@ -179,27 +217,26 @@ def load_agent(agent, checkpoint_path, player_name):
 
 # Example usage:
 if __name__ == '__main__':
-    env = PentagoEnv2()  # Assuming PentagoGame implements the necessary environment methods
+    env = PentagoEnv()  # Assuming PentagoGame implements the necessary environment methods
 
     # Players
-    dqn_agents = [HybridAgent(env), HybridAgent(env)]
+    ddqn_agents = [HybridAgent(env), HybridAgent(env)]
 
     # Load pre-trained agents
-    checkpoint_path = 'saved_agents/hybrid_agents_after_train.pth'
-    for i, agent in enumerate(dqn_agents):
-        load_agent(agent, checkpoint_path, f'player{i + 1}')
-
-    print('Agents Loaded.')
+    checkpoint_path = 'saved_agents/ddqn_agents_after_train.pth'
+    for i, agent in enumerate(ddqn_agents):
+        load_ddqn_agent(agent, checkpoint_path, f'player{i + 1}')
 
     # Continue training
-    agent_vs_agent_train(dqn_agents, env, num_episodes=50000)
+    agent_vs_agent_train(ddqn_agents, env, num_episodes=100000)
 
     # Save the trained agents
     torch.save({
-        'model_state_dict_player1': dqn_agents[0].model.state_dict(),
-        'target_model_state_dict_player1': dqn_agents[0].target_model.state_dict(),
-        'optimizer_state_dict_player1': dqn_agents[0].optimizer.state_dict(),
-        'model_state_dict_player2': dqn_agents[1].model.state_dict(),
-        'target_model_state_dict_player2': dqn_agents[1].target_model.state_dict(),
-        'optimizer_state_dict_player2': dqn_agents[1].optimizer.state_dict(),
-    }, 'saved_agents/hybrid_agents_after_continue_train.pth')
+        'model_state_dict_player1': ddqn_agents[0].model.state_dict(),
+        'target_model_state_dict_player1': ddqn_agents[0].target_model.state_dict(),
+        'optimizer_state_dict_player1': ddqn_agents[0].optimizer.state_dict(),
+        'model_state_dict_player2': ddqn_agents[1].model.state_dict(),
+        'target_model_state_dict_player2': ddqn_agents[1].target_model.state_dict(),
+        'optimizer_state_dict_player2': ddqn_agents[1].optimizer.state_dict(),
+    }, 'saved_agents/ddqnd_agents_after_continue_train.pth')
+

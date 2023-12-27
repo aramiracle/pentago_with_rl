@@ -142,3 +142,12 @@ class PentagoEnv(gym.Env):
         board_button, rotation = action
         row, col = divmod(board_button, 6)
         return row, col, rotation // 2, rotation % 2 == 0
+    
+    def clone(self):
+        new_env = PentagoEnv()
+        new_env.board = self.board.clone()
+        new_env.current_player = self.current_player
+        new_env.winner = self.winner
+        new_env.last_row = self.last_row
+        new_env.last_col = self.last_col
+        return new_env
