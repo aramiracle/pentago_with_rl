@@ -2,7 +2,7 @@ import sys
 import torch
 from PyQt6.QtWidgets import QMainWindow, QApplication, QLabel, QWidget, QVBoxLayout, QGridLayout, QPushButton, QMessageBox, QHBoxLayout, QRadioButton, QInputDialog
 from PyQt6.QtGui import QColor
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import QTimer
 import numpy as np
 from app.environment import PentagoEnv
 from app.environment2 import PentagoEnv2
@@ -46,10 +46,10 @@ class PentagoGame(QMainWindow):
         for row in range(6):
             for col in range(6):
                 button = QPushButton()
-                button.setFixedSize(60, 60)
+                button.setFixedSize(80, 80)  # Adjust the size as needed
                 button.setStyleSheet(
-                    "QPushButton { background-color: #e0e0e0; border: 1px solid black; border-radius: 30px; color: black; }"
-                    "QPushButton:hover { background-color: #c0c0c0; }"
+                    f"QPushButton {{ background-color: white; border: 1px solid black; border-radius: 40px; color: black; }}"
+                    "QPushButton:hover { background-color: black; }"
                 )
                 button.clicked.connect(self.board_button_clicked)
                 self.board_buttons[row][col] = button
@@ -62,7 +62,7 @@ class PentagoGame(QMainWindow):
         for i in range(4):
             for j in range(2):
                 rotate_button = QPushButton()
-                rotate_button.setFixedSize(30, 30)
+                rotate_button.setFixedSize(50, 50)
                 rotate_button.setStyleSheet("font-size: 18px; font-weight: bold;")
                 rotate_button.setText("↻" if j == 0 else "↺")
                 rotate_button.clicked.connect(lambda _, idx=i, clockwise=j == 0: self.rotate_board_part(idx, clockwise=clockwise))
@@ -176,10 +176,10 @@ class PentagoGame(QMainWindow):
             for col in range(6):
                 button = self.board_buttons[row][col]
                 value = self.agent.env.board[row, col]
-                color = 'blue' if value == 1 else 'red' if value == 2 else '#e0e0e0'
+                color = 'blue' if value == 1 else 'red' if value == 2 else 'white'
                 button.setStyleSheet(
                     f"background-color: {color}; "
-                    "border: 1px solid black; border-radius: 30px; color: black;"
+                    "border: 1px solid black; border-radius: 40px; color: black;"
                 )
 
     def get_corner_ranges(self, corner_index):
@@ -191,17 +191,6 @@ class PentagoGame(QMainWindow):
             return (3, 6), (0, 3)
         elif corner_index == 3:
             return (3, 6), (3, 6)
-
-    def update_board_buttons(self):
-        for row in range(6):
-            for col in range(6):
-                button = self.board_buttons[row][col]
-                value = self.agent.env.board[row, col]
-                color = 'blue' if value == 1 else 'red' if value == 2 else '#e0e0e0'
-                button.setStyleSheet(
-                    f"background-color: {color}; "
-                    "border: 1px solid black; border-radius: 30px; color: black;"
-                )
 
     def disable_board_buttons(self):
         for row in range(6):
