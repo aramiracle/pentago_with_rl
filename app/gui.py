@@ -34,9 +34,9 @@ class PentagoGame(QWidget):
         for row in range(6):
             for col in range(6):
                 button = QPushButton()
-                button.setFixedSize(60, 60)
+                button.setFixedSize(100, 100)
                 button.setStyleSheet(
-                    "QPushButton { background-color: #e0e0e0; border: 1px solid black; border-radius: 30px; color: black; }"
+                    "QPushButton { background-color: #e0e0e0; border: 1px solid black; border-radius: 50px; color: black; }"
                     "QPushButton:hover { background-color: #c0c0c0; }"
                 )
                 button.clicked.connect(self.board_button_clicked)
@@ -51,7 +51,7 @@ class PentagoGame(QWidget):
         for i in range(4):
             for j in range(2):
                 rotate_button = QPushButton()
-                rotate_button.setFixedSize(30, 30)
+                rotate_button.setFixedSize(50, 50)
                 rotate_button.setStyleSheet("font-size: 18px; font-weight: bold;")
                 rotate_button.setText("↻" if j == 0 else "↺")
                 rotate_button.clicked.connect(lambda _, idx=i, clockwise=j == 0: self.rotate_board_part(idx, clockwise=clockwise))
@@ -122,7 +122,7 @@ class PentagoGame(QWidget):
                 color = 'blue' if value == 1 else 'red' if value == 2 else '#e0e0e0'
                 button.setStyleSheet(
                     f"background-color: {color}; "
-                    "border: 1px solid black; border-radius: 30px; color: black;"
+                    "border: 1px solid black; border-radius: 50px; color: black;"
                 )
 
     def board_button_clicked(self):
