@@ -108,6 +108,9 @@ class PentagoGame(QMainWindow):
         self.status_label = QLabel()
         layout.addWidget(self.status_label)
 
+        self.disable_board_buttons()
+        self.disable_rotation_buttons()
+
         self.show()
 
     def board_button_clicked(self):

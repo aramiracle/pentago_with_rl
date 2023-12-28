@@ -101,17 +101,17 @@ class HybridAgent:
             board_action = random.choice(available_actions)
             rotation_action = random.randint(0, 7)  # Assuming rotation actions are integers from 0 to 7
         else:
-            instant_win_actions = []
+            instant_win_action = None
             for action in available_actions:
                 for rotation in range(7):
                     if self.is_instant_win(self.env, (action, rotation)):
-                        instant_win_actions.append((action, rotation))
+                        instant_win_action = (action, rotation)
                         break
-                if instant_win_actions:
+                if instant_win_action:
                     break
-            if instant_win_actions:
+            if instant_win_action:
                 # If there are instant win moves, choose one randomly
-                board_action, rotation_action = instant_win_actions[0]
+                board_action, rotation_action = instant_win_action
             else:
                 state_tensor = state.unsqueeze(0)
                 with torch.no_grad():
@@ -238,5 +238,5 @@ if __name__ == '__main__':
         'model_state_dict_player2': ddqn_agents[1].model.state_dict(),
         'target_model_state_dict_player2': ddqn_agents[1].target_model.state_dict(),
         'optimizer_state_dict_player2': ddqn_agents[1].optimizer.state_dict(),
-    }, 'saved_agents/hybrid_agents_after_continue_train.pth')
+    }, 'saved_agents/hybrid_agents_after_train.pth')
 

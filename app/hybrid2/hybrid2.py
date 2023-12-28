@@ -74,15 +74,15 @@ class Hybrid2Agent:
         if random.random() < epsilon:
             action = random.choice(available_actions)
         else:
+            instant_win_action = None
             # Check for instant win moves
-            instant_win_actions = []
             for action in available_actions:
                 if self.is_instant_win(self.env, action):
-                    instant_win_actions.append(action)
+                    instant_win_action = action
                     break
-            if instant_win_actions:
+            if instant_win_action:
                 # If there are instant win moves, choose one randomly
-                action = random.choice(instant_win_actions)
+                action = instant_win_action
             else:
                 state_tensor = state.unsqueeze(0)  # Adding batch dimension
                 with torch.no_grad():
@@ -202,4 +202,4 @@ if __name__ == '__main__':
         'model_state_dict_player2': dqn_agents[1].model.state_dict(),
         'target_model_state_dict_player2': dqn_agents[1].target_model.state_dict(),
         'optimizer_state_dict_player2': dqn_agents[1].optimizer.state_dict(),
-    }, 'saved_agents/hybrid2_agents_after_continue_train.pth')
+    }, 'saved_agents/hybrid2_agents_after_train.pth')
