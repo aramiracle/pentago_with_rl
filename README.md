@@ -319,7 +319,7 @@ To train the AI model, run one of the following scripts depending on the version
 For the standard DQN as an example:
 
 ```
-python dqn.py
+python ddqn.py
 ```
 
 ### Playing Game with AI
