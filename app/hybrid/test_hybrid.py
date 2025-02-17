@@ -71,12 +71,12 @@ if __name__ == '__main__':
 
     # Load AI agent
     ai_agent_player1 = HybridAgent(env)
-    checkpoint_player1 = torch.load('saved_agents/hybrid_agents_after_train.pth')
+    checkpoint_player1 = torch.load('saved_agents/hybrid_agents_trained.pth')
     ai_agent_player1.target_model.load_state_dict(checkpoint_player1['model_state_dict_player1'])
     ai_agent_player1.q_model.eval() # Set to eval mode for inference
 
     ai_agent_player2 = HybridAgent(env)
-    checkpoint_player2 = torch.load('saved_agents/hybrid_agents_after_train.pth')
+    checkpoint_player2 = torch.load('saved_agents/hybrid_agents_trained.pth')
     ai_agent_player2.target_model.load_state_dict(checkpoint_player2['model_state_dict_player2'])
     ai_agent_player2.q_model.eval() # Set to eval mode for inference
 
@@ -90,4 +90,3 @@ if __name__ == '__main__':
     # Print results
     print(f"AI vs Random Bot Results: AI Wins - {ai_vs_random_results[0]}, Random Bot Wins - {ai_vs_random_results[1]}, Draws - {ai_vs_random_results[2]}, AI Win Rate - {ai_vs_random_results[3]:.2%}")
     print(f"Random Bot vs AI Results: Random Bot Wins - {random_vs_ai_results[0]}, AI Wins - {random_vs_ai_results[1]}, Draws - {random_vs_ai_results[2]}, AI Win Rate - {random_vs_ai_results[3]:.2%}")
-    

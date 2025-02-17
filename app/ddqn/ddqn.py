@@ -14,35 +14,35 @@ class DuelingDQN(nn.Module):
     def __init__(self):
         super(DuelingDQN, self).__init__()
         # Convolutional layers for shared feature extraction
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1) # Input channels: 3 (planes), Output channels: 32
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.bn2 = nn.BatchNorm2d(64)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.bn3 = nn.BatchNorm2d(64)
+        self.conv1 = nn.Conv2d(3, 8, kernel_size=3, stride=1, padding=1) # Input channels: 3 (planes), Output channels: 32
+        self.bn1 = nn.BatchNorm2d(8)
+        self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(16)
+        self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
+        self.bn3 = nn.BatchNorm2d(32)
 
         # Calculate the output size after convolutions and flatten
         # Assuming input is 6x6, after padding=1 and kernel_size=3, size remains roughly 6x6
-        conv_out_size = 6 * 6 * 64  # Height * Width * Channels after conv layers
+        conv_out_size = 6 * 6 * 32  # Height * Width * Channels after conv layers
 
         # Shared layers after convolution
-        self.fc_shared = nn.Linear(conv_out_size, 512)
-        self.bn_shared = nn.BatchNorm1d(512)
+        self.fc_shared = nn.Linear(conv_out_size, 256)
+        self.bn_shared = nn.BatchNorm1d(256)
 
         # Value stream layers
-        self.fc_value1 = nn.Linear(512, 256)
-        self.bn_value1 = nn.BatchNorm1d(256)
-        self.fc_value2 = nn.Linear(256, 1)
+        self.fc_value1 = nn.Linear(256, 128)
+        self.bn_value1 = nn.BatchNorm1d(128)
+        self.fc_value2 = nn.Linear(128, 1)
 
         # Advantage stream layers for board button actions
-        self.fc_advantage_board1 = nn.Linear(512, 256)
-        self.bn_advantage_board1 = nn.BatchNorm1d(256)
-        self.fc_advantage_board2 = nn.Linear(256, 36) # 36 board actions
+        self.fc_advantage_board1 = nn.Linear(256, 128)
+        self.bn_advantage_board1 = nn.BatchNorm1d(128)
+        self.fc_advantage_board2 = nn.Linear(128, 36) # 36 board actions
 
         # Advantage stream layers for rotation actions
-        self.fc_advantage_rotation1 = nn.Linear(512, 256)
-        self.bn_advantage_rotation1 = nn.BatchNorm1d(256)
-        self.fc_advantage_rotation2 = nn.Linear(256, 8) # 8 rotation actions
+        self.fc_advantage_rotation1 = nn.Linear(256, 128)
+        self.bn_advantage_rotation1 = nn.BatchNorm1d(128)
+        self.fc_advantage_rotation2 = nn.Linear(128, 8) # 8 rotation actions
 
     def forward(self, x):
         # Input x should be (batch_size, 6, 6) representing the board state
