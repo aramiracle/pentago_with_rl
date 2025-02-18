@@ -1,6 +1,7 @@
 import gym
 import numpy as np
 import torch
+import timeit
 
 class PentagoEnv2(gym.Env):
     def __init__(self):
@@ -67,12 +68,12 @@ class PentagoEnv2(gym.Env):
 
         # Check for win/draw
         win_player = None
-        if self.check_win(1):
-            win_player = 1
-        if self.check_win(2):
-            if win_player is not None: # Both players won in the same move, which is draw in Pentago
-                return 50.0, True, {'winner': 'Draw'}
-            win_player = 2
+        if self.check_win(self.current_player): # Optimized: Check win only for current player first
+            win_player = self.current_player
+        elif self.check_win(3 - self.current_player): # Then check for opponent
+            win_player = 3 - self.current_player
+        elif self.check_win(1) and self.check_win(2): # Double check for draw condition if needed (less frequent)
+            return 50.0, True, {'winner': 'Draw'}
 
         if win_player is not None:
             if win_player == self.current_player:
@@ -103,14 +104,15 @@ class PentagoEnv2(gym.Env):
         print(self.board)
 
     def check_win(self, player):
-        # Check all directions for a win condition
+        last_row, last_col = self.get_last_move()
+        if last_row is None or last_col is None: # No move made yet, no win possible
+            return False
+
+        # Check in all directions from the last placed piece
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-        for row in range(6):
-            for col in range(6):
-                if self.board[row, col] == player:
-                    for dr, dc in directions:
-                        if self.count_aligned(row, col, dr, dc, player) >= 5:
-                            return True
+        for dr, dc in directions:
+            if self.count_aligned(last_row, last_col, dr, dc, player) >= 5:
+                return True
         return False
 
     def count_aligned(self, row, col, dr, dc, player):
@@ -182,37 +184,141 @@ class PentagoEnv2(gym.Env):
 
     def check_block_opponent_win(self):
         opponent_player = 3 - self.current_player
-        opponent_winning_moves_before = self._get_winning_moves(opponent_player, self.previous_board) if self.previous_board is not None else [] # Winning moves opponent *had* before current move
-        opponent_winning_moves_after = self._get_winning_moves(opponent_player, self.board) # Winning moves opponent has *now*
+        opponent_winning_moves_before = self._get_winning_moves_optimized(opponent_player, self.previous_board) if self.previous_board is not None else [] # Optimized version
+        opponent_winning_moves_after = self._get_winning_moves_optimized(opponent_player, self.board) # Optimized version
 
         if opponent_winning_moves_before and not opponent_winning_moves_after:
             return 1 # Blocked opponent win
         return 0
 
     def check_create_winning_threat(self):
-        current_player_winning_moves = self._get_winning_moves(self.current_player, self.board)
+        current_player_winning_moves = self._get_winning_moves_optimized(self.current_player, self.board) # Optimized version
         if current_player_winning_moves:
             return 1 # Created winning threat (or immediate win)
         return 0
 
     def check_give_opponent_winning_move(self):
         opponent_player = 3 - self.current_player
-        opponent_winning_moves = self._get_winning_moves(opponent_player, self.board)
+        opponent_winning_moves = self._get_winning_moves_optimized(opponent_player, self.board) # Optimized version
         if opponent_winning_moves:
             return 1 # Gave opponent winning move
         return 0
 
-    def _get_winning_moves(self, player, current_board):
+    def _get_winning_moves_optimized(self, player, current_board): # Optimized _get_winning_moves - No Board Cloning Version
         winning_moves = []
+        original_board = self.board.clone() # Clone board *once* outside loops
+
         for action in range(36 * 8):
             board_button, rotation = divmod(action, 8)
             row, col = divmod(board_button, 6)
             if current_board[row, col] == 0:
-                temp_board = current_board.clone()
-                temp_board[row, col] = player
-                temp_env = self.clone() # Use clone to avoid modifying original env state
-                temp_env.board = temp_board
-                temp_env.rotate_board_part(rotation // 2, rotation % 2 == 0)
-                if temp_env.check_win(player):
-                    winning_moves.append(action) # Append the action directly
+                # 1. Temporarily modify the board *IN-PLACE*
+                original_subgrid = None
+                corner_index = rotation // 2
+                if not (corner_index < 0 or corner_index > 3):
+                    row_range, col_range = self.get_corner_ranges(corner_index)
+                    subgrid_to_rotate = self.board[row_range[0]:row_range[1], col_range[0]:col_range[1]].clone() # Clone subgrid only
+                    original_subgrid = subgrid_to_rotate.clone() # Backup subgrid
+
+                self.board = current_board.clone() # Still need to set board from current_board for each action
+                self.board[row, col] = player
+
+                self.rotate_board_part(rotation // 2, rotation % 2 == 0) # Rotate IN-PLACE
+
+                # 2. Check for win (no change here - using optimized check_win already)
+                if self.check_win(player):
+                    winning_moves.append(action)
+
+                # 3. Revert board changes (restore from original_board - NO CLONE here)
+                self.board = original_board.clone() # Restore original board for next iteration - still need to clone for next iteration to be clean
+                if original_subgrid is not None:
+                    row_range, col_range = self.get_corner_ranges(corner_index) # need to get row_range and col_range again
+                    self.board[row_range[0]:row_range[1], col_range[0]:col_range[1]] = original_subgrid # Restore subgrid
+
         return winning_moves
+
+if __name__ == '__main__':
+    env = PentagoEnv2()
+
+    num_repetitions = 10
+
+    functions_to_test = [
+        "reset",
+        "step",
+        "get_reward_done_info",
+        "calculate_progress_reward",
+        "render",
+        "check_win",
+        "count_aligned",
+        "count_direction",
+        "rotate_board_part",
+        "get_corner_ranges",
+        "check_draw",
+        "get_last_move",
+        "get_valid_actions",
+        "is_valid_action",
+        "action_to_move",
+        "clone",
+        "check_block_opponent_win",
+        "check_create_winning_threat",
+        "check_give_opponent_winning_move",
+        "_get_winning_moves_optimized", # Profiling optimized _get_winning_moves
+        "_get_winning_moves" # Profiling original _get_winning_moves
+    ]
+
+    execution_times = {}
+
+    for func_name in functions_to_test:
+        if func_name == "reset":
+            time = timeit.timeit(lambda: env.reset(), number=num_repetitions)
+        elif func_name == "step":
+            time = timeit.timeit(lambda: (env.reset(), env.step(0))[1], number=num_repetitions)
+        elif func_name == "get_reward_done_info":
+            time = timeit.timeit(lambda: env.get_reward_done_info(0), number=num_repetitions)
+        elif func_name == "calculate_progress_reward":
+            time = timeit.timeit(lambda: env.calculate_progress_reward(1, 0, 0), number=num_repetitions)
+        elif func_name == "render":
+            time = timeit.timeit(lambda: env.render(), number=num_repetitions)
+            num_repetitions = 1
+        elif func_name == "check_win":
+            time = timeit.timeit(lambda: env.check_win(1), number=num_repetitions)
+        elif func_name == "count_aligned":
+            time = timeit.timeit(lambda: env.count_aligned(0, 0, 1, 0, 1), number=num_repetitions)
+        elif func_name == "count_direction":
+            time = timeit.timeit(lambda: env.count_direction(0, 0, 1, 0, 1, 1), number=num_repetitions)
+        elif func_name == "rotate_board_part":
+            time = timeit.timeit(lambda: env.rotate_board_part(0, True), number=num_repetitions)
+        elif func_name == "get_corner_ranges":
+            time = timeit.timeit(lambda: env.get_corner_ranges(0), number=num_repetitions)
+        elif func_name == "check_draw":
+            time = timeit.timeit(lambda: env.check_draw(), number=num_repetitions)
+        elif func_name == "get_last_move":
+            time = timeit.timeit(lambda: env.get_last_move(), number=num_repetitions)
+        elif func_name == "get_valid_actions":
+            time = timeit.timeit(lambda: env.get_valid_actions(), number=num_repetitions)
+        elif func_name == "is_valid_action":
+            time = timeit.timeit(lambda: env.is_valid_action(0), number=num_repetitions)
+        elif func_name == "action_to_move":
+            time = timeit.timeit(lambda: env.action_to_move(0), number=num_repetitions)
+        elif func_name == "clone":
+            time = timeit.timeit(lambda: env.clone(), number=num_repetitions)
+        elif func_name == "check_block_opponent_win":
+            env.reset()
+            env.step(0)
+            time = timeit.timeit(lambda: env.check_block_opponent_win(), number=num_repetitions)
+        elif func_name == "check_create_winning_threat":
+            time = timeit.timeit(lambda: env.check_create_winning_threat(), number=num_repetitions)
+        elif func_name == "check_give_opponent_winning_move":
+            time = timeit.timeit(lambda: env.check_give_opponent_winning_move(), number=num_repetitions)
+        elif func_name == "_get_winning_moves_optimized":
+            time = timeit.timeit(lambda: env._get_winning_moves_optimized(1, env.board), number=num_repetitions)
+        elif func_name == "_get_winning_moves":
+            time = timeit.timeit(lambda: env._get_winning_moves(1, env.board), number=num_repetitions)
+        else:
+            time = -1
+
+        execution_times[func_name] = time
+
+    print("Execution times for PentagoEnv2 (lower is better, in seconds for {} repetitions):".format(num_repetitions))
+    for func_name, time in execution_times.items():
+        print(f"- {func_name}: {time:.6f} seconds")

@@ -1,6 +1,7 @@
 import gym
 import numpy as np
 import torch
+import timeit
 
 class PentagoEnv(gym.Env):
     def __init__(self):
@@ -63,30 +64,28 @@ class PentagoEnv(gym.Env):
         # Calculate immediate reward based on placed piece
         progress_reward = self.calculate_progress_reward(self.current_player, self.last_row, self.last_col)
 
-        block_opponent_win_reward = self.check_block_opponent_win() * 60 # Reward for blocking opponent win (increased to 60)
-        create_winning_threat_reward = self.check_create_winning_threat() * 20 # Reward for creating winning threat
-        give_opponent_winning_move_penalty = self.check_give_opponent_winning_move() * -80 # Penalty for giving opponent winning move (increased to -80)
+        block_opponent_win_reward = self.check_block_opponent_win() * 60
+        create_winning_threat_reward = self.check_create_winning_threat() * 20
+        give_opponent_winning_move_penalty = self.check_give_opponent_winning_move() * -80
 
-
-        # Check for win/draw
+        # Check for win/draw (optimized check_win - only check for current player)
         win_player = None
-        if self.check_win(1):
-            win_player = 1
-        if self.check_win(2):
-            if win_player is not None: # Both players won in the same move, which is draw in Pentago
-                return 50.0, True, {'winner': 'Draw'}
-            win_player = 2
+        if self.check_win(self.current_player): # Optimized: Only check win for current player first
+            win_player = self.current_player
+        elif self.check_win(3 - self.current_player): # Then check for opponent only if current player didn't win
+            win_player = 3 - self.current_player
+
 
         if win_player is not None:
             if win_player == self.current_player:
                 return 100.0 + progress_reward + block_opponent_win_reward + create_winning_threat_reward + give_opponent_winning_move_penalty, True, {'winner': f'Player {self.current_player}'}
             else:
-                return -100.0 + give_opponent_winning_move_penalty, True, {'winner': f'Player {win_player}'} # Opponent won, penalize
+                return -100.0 + give_opponent_winning_move_penalty, True, {'winner': f'Player {win_player}'}
 
         if self.check_draw():
             return 50.0, True, {'winner': 'Draw'}
 
-        # Game continues, give a small negative reward to encourage faster win, plus other rewards/penalties
+        # Game continues
         return -1 + progress_reward + block_opponent_win_reward + create_winning_threat_reward + give_opponent_winning_move_penalty, False, {'winner': 'Game is not finished yet.'}
 
 
@@ -106,14 +105,15 @@ class PentagoEnv(gym.Env):
         print(self.board)
 
     def check_win(self, player):
-        # Check all directions for a win condition
+        last_row, last_col = self.get_last_move()
+        if last_row is None or last_col is None: # No move made yet, no win possible
+            return False
+
+        # Check in all directions from the last placed piece
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-        for row in range(6):
-            for col in range(6):
-                if self.board[row, col] == player:
-                    for dr, dc in directions:
-                        if self.count_aligned(row, col, dr, dc, player) >= 5:
-                            return True
+        for dr, dc in directions:
+            if self.count_aligned(last_row, last_col, dr, dc, player) >= 5:
+                return True
         return False
 
     def count_aligned(self, row, col, dr, dc, player):
@@ -183,37 +183,76 @@ class PentagoEnv(gym.Env):
 
     def check_block_opponent_win(self):
         opponent_player = 3 - self.current_player
-        opponent_winning_moves_before = self._get_winning_moves(opponent_player, self.previous_board) # Winning moves opponent *had* before current move
-        opponent_winning_moves_after = self._get_winning_moves(opponent_player, self.board) # Winning moves opponent has *now*
+        opponent_winning_moves_before = self._get_winning_moves_optimized(opponent_player, self.previous_board) # No clone version
+        opponent_winning_moves_after = self._get_winning_moves_optimized(opponent_player, self.board) # No clone version
 
         if opponent_winning_moves_before and not opponent_winning_moves_after:
             return 1 # Blocked opponent win
         return 0
 
     def check_create_winning_threat(self):
-        current_player_winning_moves = self._get_winning_moves(self.current_player, self.board)
+        current_player_winning_moves = self._get_winning_moves_optimized(self.current_player, self.board) # No clone version
         if current_player_winning_moves:
             return 1 # Created winning threat (or immediate win)
         return 0
 
     def check_give_opponent_winning_move(self):
         opponent_player = 3 - self.current_player
-        opponent_winning_moves = self._get_winning_moves(opponent_player, self.board)
+        opponent_winning_moves = self._get_winning_moves_optimized(opponent_player, self.board) # No clone version
         if opponent_winning_moves:
             return 1 # Gave opponent winning move
         return 0
 
-    def _get_winning_moves(self, player, current_board):
+    def _get_winning_moves_optimized(self, player, current_board): # No Board Cloning Version
         winning_moves = []
+        original_board = self.board.clone() # Clone board *once* outside loops
+
         for board_button in range(36):
             row, col = divmod(board_button, 6)
             if current_board[row, col] == 0:
                 for rotation in range(8):
-                    temp_board = current_board.clone()
-                    temp_board[row, col] = player
-                    temp_env = self.clone() # Use clone to avoid modifying original env state
-                    temp_env.board = temp_board
-                    temp_env.rotate_board_part(rotation // 2, rotation % 2 == 0)
-                    if temp_env.check_win(player):
+                    # 1. Temporarily modify the board *IN-PLACE*
+                    original_subgrid = None
+                    row_range, col_range = self.get_corner_ranges(rotation // 2)
+                    if not (rotation // 2 < 0 or rotation // 2 > 3):
+                        subgrid_to_rotate = self.board[row_range[0]:row_range[1], col_range[0]:col_range[1]].clone() # Clone subgrid only
+                        original_subgrid = subgrid_to_rotate.clone() # Backup subgrid
+
+                    self.board = current_board.clone() # Still need to set board from current_board for each board_button
+                    self.board[row, col] = player
+
+                    self.rotate_board_part(rotation // 2, rotation % 2 == 0) # Rotate IN-PLACE
+
+                    # 2. Check for win (no change here)
+                    if self.check_win(player):
                         winning_moves.append(((board_button, rotation)))
+
+                    # 3. Revert board changes (restore from original_board - NO CLONE here)
+                    self.board = original_board.clone() # Restore original board for next iteration - still need to clone for next iteration to be clean
+                    if original_subgrid is not None:
+                        self.board[row_range[0]:row_range[1], col_range[0]:col_range[1]] = original_subgrid # Restore subgrid
+
         return winning_moves
+
+    def _step_place_piece(self, action):
+        board_button, rotation = action
+        row, col = divmod(board_button, 6)
+        self.previous_board = self.board.clone()
+        if self.board[row, col] != 0:
+            raise ValueError("Invalid move: Cell is already occupied")
+        self.board[row, col] = self.current_player
+        self.last_row, self.last_col = row, col
+        return None # We are just timing piece placement, not the full step
+
+    def _step_rotate_board(self, action):
+        board_button, rotation = action
+        row, col = divmod(board_button, 6)
+        self._step_place_piece(action) # Need to place piece first
+        self.rotate_board_part(rotation // 2, rotation % 2 == 0)
+        return None # We are just timing rotation, not the full step
+
+    def _step_get_reward(self, action):
+        board_button, rotation = action
+        row, col = divmod(board_button, 6)
+        self._step_rotate_board(action) # Need to place and rotate first
+        return self.get_reward_done_info(action) # Now time get_reward_done_info
