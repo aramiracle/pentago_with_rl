@@ -2,6 +2,8 @@
 
 An AI-powered Pentago board game complete with a graphical user interface (GUI) and reinforcement learning (RL) agents. This project demonstrates how to integrate RL algorithms into a game setting using Python, PyTorch, and PyQt6.
 
+![Game Interface](game_interface.png)
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -21,6 +23,8 @@ An AI-powered Pentago board game complete with a graphical user interface (GUI) 
 ## Overview
 
 Pentago is a two-player abstract strategy game played on a 6×6 board, where each player aims to align five marbles in a row. In this project, various reinforcement learning agents learn and make decisions to play the game. The project provides a user-friendly GUI for playing against these AI agents, serving as an excellent example of applying reinforcement learning to game AI.
+
+
 
 ## Features
 
