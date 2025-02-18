@@ -299,7 +299,7 @@ if __name__ == '__main__':
     epsilon_start = 0.5
     epsilon_final = 0.01
     epsilon_decay = 0.995
-    num_episodes = 1000  # Increased episodes for better learning
+    num_episodes = 3000  # Increased episodes for better learning
     batch_size = 128       # Increased batch size
     target_update_frequency = 500 # Increased target update frequency
     buffer_capacity = 1000000

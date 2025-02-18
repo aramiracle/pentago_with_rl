@@ -21,7 +21,7 @@ def simulate_game(env, player1, player2):
             action = player1.select_action(state, epsilon=0)
         else:
             action = player2.select_action(state, epsilon=0)
-        state, _, done, _ = env.step(action)
+        state, _, done, _ = env.step(action, train=False)
     return env.winner
 
 def test_ai_vs_random(env, ai_agent, random_bot, num_games=1000):

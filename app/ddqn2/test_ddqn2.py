@@ -21,7 +21,7 @@ def simulate_game(env, player1, player2):
             action = player1.select_action(state, epsilon=0)
         else:
             action = player2.select_action(state, epsilon=0)
-        state, _, done, _ = env.step(action)
+        state, _, done, _ = env.step(action, train=False)
     return env.winner
 
 def test_ai_vs_random(env, ai_agent, random_bot, num_games=1000):
@@ -73,12 +73,12 @@ if __name__ == '__main__':
     ai_agent_player1 = DDQN2Agent(env)
     checkpoint_player1 = torch.load('saved_agents/ddqn2_agents_trained.pth')
     ai_agent_player1.target_model.load_state_dict(checkpoint_player1['model_state_dict_player1'])
-    ai_agent_player1.q_model.eval()
+    ai_agent_player1.model.eval()
 
     ai_agent_player2 = DDQN2Agent(env)
     checkpoint_player2 = torch.load('saved_agents/ddqn2_agents_trained.pth')
     ai_agent_player2.target_model.load_state_dict(checkpoint_player2['model_state_dict_player2'])
-    ai_agent_player2.q_model.eval()
+    ai_agent_player2.model.eval()
 
     # Create RandomBot
     random_bot = RandomBot(env)

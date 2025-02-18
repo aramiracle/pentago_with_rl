@@ -35,7 +35,7 @@ class PentagoEnv(gym.Env):
         self.previous_board = None
         return self.board
 
-    def step(self, action):
+    def step(self, action, train=True):
         # Action is a tuple (board_button, rotation)
         board_button, rotation = action
         row, col = divmod(board_button, 6)
@@ -49,10 +49,14 @@ class PentagoEnv(gym.Env):
         self.last_row, self.last_col = row, col
 
         # Rotate the board part
-        self.rotate_board_part(rotation // 2, rotation % 2 == 0)  # Adjust rotation values
+        self.rotate_board_part(rotation // 2, rotation % 2)  # Adjust rotation values
 
         # Check for game end and calculate reward
-        reward, done, info = self.get_reward_done_info(action) # Pass action to reward function
+        if train:
+            reward, done, info = self.get_reward_done_info(action) # Pass action to reward function
+        else:
+            done, info = self.get_done_info(action)
+            reward = 0.0
 
         # Switch player if game is not over
         if not done:
@@ -87,6 +91,23 @@ class PentagoEnv(gym.Env):
 
         # Game continues
         return -1 + progress_reward + block_opponent_win_reward + create_winning_threat_reward + give_opponent_winning_move_penalty, False, {'winner': 'Game is not finished yet.'}
+
+    def get_done_info(self, action):
+        # Check for win/draw (optimized check_win - only check for current player)
+        win_player = None
+        if self.check_win(self.current_player): # Optimized: Only check win for current player first
+            win_player = self.current_player
+        elif self.check_win(3 - self.current_player): # Then check for opponent only if current player didn't win
+            win_player = 3 - self.current_player
+
+        if win_player is not None:
+            return True, {'winner': f'Player {win_player}'}
+
+        if self.check_draw():
+            return True, {'winner': 'Draw'}
+
+        # Game continues
+        return False, {'winner': 'Game is not finished yet.'}
 
 
     def calculate_progress_reward(self, player, row, col):
